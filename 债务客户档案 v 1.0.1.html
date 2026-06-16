@@ -1,0 +1,1311 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>债务客户档案 v 1.0.1</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --teal: #08766f;
+        --teal-soft: #edf8f6;
+        --ink: #151f1d;
+        --muted: #6d7774;
+        --line: #e0e5e2;
+        --paper: #fff;
+        --danger: #e60012;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #f7f8f7;
+        color: var(--ink);
+        font-family:
+          ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        border: 0;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .app {
+        width: min(100%, 430px);
+        min-height: 100dvh;
+        margin: 0 auto;
+        padding: 0 15px 14px;
+        background: var(--paper);
+      }
+
+      .top-bar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: grid;
+        grid-template-columns: 64px 1fr 64px;
+        align-items: center;
+        min-height: 58px;
+        margin: 0 -15px 18px;
+        padding: 0 15px;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(12px);
+      }
+
+      .top-title {
+        text-align: center;
+        font-size: 18px;
+        font-weight: 900;
+      }
+
+      .top-title::after {
+        content: "1.0.1";
+        display: inline-flex;
+        align-items: center;
+        margin-left: 6px;
+        padding: 1px 5px;
+        border-radius: 999px;
+        background: var(--teal-soft);
+        color: var(--teal);
+        font-size: 10px;
+        font-weight: 700;
+        vertical-align: middle;
+      }
+
+      .top-action {
+        min-height: 32px;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--teal);
+        font-size: 13px;
+        font-weight: 820;
+      }
+
+      .top-action.left {
+        text-align: left;
+        letter-spacing: 0;
+      }
+
+      .top-action.right {
+        padding-right: 16px;
+        text-align: right;
+      }
+
+      .screen {
+        display: none;
+      }
+
+      .screen.active {
+        display: block;
+      }
+
+      .search-box,
+      .box,
+      .table-box {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .search-box {
+        margin-bottom: 12px;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        border: 0;
+        background: transparent;
+        color: var(--ink);
+        outline: none;
+      }
+
+      input,
+      select {
+        min-height: 38px;
+        padding: 0 10px;
+        font-size: 12px;
+        font-weight: 480;
+      }
+
+      textarea {
+        min-height: 84px;
+        padding: 10px;
+        resize: none;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      input::placeholder,
+      textarea::placeholder {
+        color: #8c9693;
+      }
+
+      .client-list,
+      .detail-block {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+
+      .client-line {
+        position: relative;
+        overflow: hidden;
+        background: #fff;
+        touch-action: pan-y;
+      }
+
+      .client-card {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        min-height: 56px;
+        padding: 10px 10px 10px 16px;
+        border-bottom: 1px solid var(--line);
+        background: #fff;
+        text-align: left;
+        transition: transform 0.2s ease;
+      }
+
+      .client-line:last-child .client-card {
+        border-bottom: 0;
+      }
+
+      .client-line.open .client-card {
+        transform: translateX(-144px);
+      }
+
+      .client-edit,
+      .client-delete {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 72px;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 820;
+        opacity: 0;
+        transition: opacity 0.12s ease;
+      }
+
+      .client-edit {
+        right: 72px;
+        background: #1677ff;
+      }
+
+      .client-delete {
+        right: 0;
+        background: var(--danger);
+      }
+
+      .client-line.open .client-edit,
+      .client-line.open .client-delete {
+        opacity: 1;
+      }
+
+      .client-card .client-main {
+        display: grid;
+        grid-template-columns: 78px max-content;
+        column-gap: 16px;
+        align-items: center;
+        margin-bottom: 5px;
+      }
+
+      .client-card .client-main strong {
+        min-width: 0;
+        color: var(--ink);
+        font-size: 13px;
+        overflow-wrap: anywhere;
+      }
+
+      .client-card .client-time {
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 520;
+        white-space: nowrap;
+      }
+
+      .client-card span,
+      .empty {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .empty {
+        padding: 14px 10px;
+      }
+
+      .step {
+        margin-bottom: 18px;
+      }
+
+      .detail-block + .step {
+        margin-top: 16px;
+      }
+
+      .step-title {
+        display: flex;
+        gap: 9px;
+        align-items: center;
+        margin-bottom: 9px;
+        font-size: 18px;
+        font-weight: 900;
+      }
+
+      .step-add {
+        margin-left: auto;
+        margin-right: 16px;
+        min-height: 28px;
+        padding: 0 2px;
+        background: transparent;
+        color: var(--teal);
+        font-size: 13px;
+        font-weight: 820;
+        line-height: 1;
+      }
+
+      .num {
+        display: inline-grid;
+        width: 23px;
+        height: 23px;
+        place-items: center;
+        border-radius: 999px;
+        background: var(--teal);
+        color: #fff;
+        font-size: 15px;
+        font-weight: 900;
+      }
+
+      .info-row,
+      .detail-row {
+        display: grid;
+        grid-template-columns: 96px 1fr;
+        min-height: 38px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .info-row:last-child,
+      .detail-row:last-child {
+        border-bottom: 0;
+      }
+
+      input.is-error::placeholder {
+        color: var(--danger);
+      }
+
+      input.is-error {
+        animation: errorBlink 0.72s ease-in-out 3;
+      }
+
+      @keyframes errorBlink {
+        0%,
+        100% {
+          opacity: 1;
+        }
+
+        50% {
+          opacity: 0.35;
+        }
+      }
+
+      .label-cell,
+      .value-cell,
+      .detail-row span,
+      .detail-row strong {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        padding: 0 10px;
+        font-size: 12px;
+        font-weight: 480;
+      }
+
+      .label-cell,
+      .detail-row span {
+        border-right: 1px solid var(--line);
+        color: var(--muted);
+      }
+
+      .info-row .label-cell {
+        border-right: 0;
+      }
+
+      .value-cell {
+        gap: 8px;
+      }
+
+      .segmented {
+        display: flex;
+        gap: 10px;
+      }
+
+      .segmented button {
+        min-width: 60px;
+        min-height: 25px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+        color: var(--ink);
+        font-size: 12px;
+        font-weight: 480;
+      }
+
+      .segmented button.active {
+        border-color: var(--teal);
+        background: var(--teal-soft);
+        box-shadow: inset 0 0 0 1px rgba(8, 118, 111, 0.35);
+        color: var(--teal);
+      }
+
+      .debt-head,
+      .debt-row {
+        display: grid;
+        grid-template-columns: 0.98fr 1.26fr 1.2fr 0.78fr 0.78fr;
+        align-items: center;
+      }
+
+      .debt-head {
+        min-height: 30px;
+        border-bottom: 1px solid var(--line);
+        background: #f4f8f6;
+      }
+
+      .debt-head span,
+      .debt-row > * {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 0;
+        min-height: 38px;
+        border-right: 1px solid var(--line);
+        background: #fff;
+        font-size: 12px;
+        font-weight: 480;
+      }
+
+      .debt-head span {
+        justify-content: center;
+        min-height: 30px;
+        background: #f4f8f6;
+        color: #6d7774;
+        font-size: 11px;
+        font-weight: 620;
+      }
+
+      .debt-head span:last-child,
+      .debt-row > *:last-child {
+        border-right: 0;
+      }
+
+      .debt-line {
+        position: relative;
+        overflow: hidden;
+        background: #fff;
+        touch-action: pan-y;
+      }
+
+      .debt-row {
+        position: relative;
+        z-index: 1;
+        min-height: 38px;
+        border-bottom: 1px solid var(--line);
+        background: #fff;
+        transition: transform 0.2s ease;
+      }
+
+      .debt-line.open .debt-row {
+        transform: translateX(-72px);
+      }
+
+      .debt-delete {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 72px;
+        background: var(--danger);
+        color: #fff;
+        font-size: 14px;
+        font-weight: 820;
+        opacity: 0;
+        transition: opacity 0.12s ease;
+      }
+
+      .debt-line.open .debt-delete {
+        opacity: 1;
+      }
+
+      .select-cell select {
+        appearance: none;
+        border-radius: 6px;
+        background: var(--teal-soft);
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .debt-row input {
+        text-align: center;
+      }
+
+      .debt-row input.is-error {
+        color: var(--ink);
+      }
+
+      .concern-box {
+        padding: 0;
+      }
+
+      .textarea-wrap {
+        position: relative;
+      }
+
+      .concern-box textarea {
+        padding: 12px 12px 28px;
+      }
+
+      .counter {
+        position: absolute;
+        right: 13px;
+        bottom: 8px;
+        color: #6d7774;
+        font-size: 13px;
+      }
+
+      .bottom-action {
+        position: sticky;
+        bottom: 0;
+        z-index: 20;
+        margin-top: 14px;
+        padding: 10px 0 0;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(12px);
+      }
+
+      .primary-btn {
+        position: relative;
+        overflow: hidden;
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid rgba(8, 118, 111, 0.5);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--teal);
+        font-size: 14px;
+        font-weight: 820;
+        transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+      }
+
+      .primary-btn:active,
+      .top-action:active,
+      .client-card:active {
+        transform: scale(0.98);
+      }
+
+      .primary-btn.is-tapped {
+        animation: buttonTap 0.34s ease;
+      }
+
+      @keyframes buttonTap {
+        0% {
+          background: #fff;
+          box-shadow: none;
+          transform: scale(1);
+        }
+
+        38% {
+          border-color: var(--teal);
+          background: var(--teal-soft);
+          box-shadow: 0 0 0 4px rgba(8, 118, 111, 0.1);
+          transform: scale(0.985);
+        }
+
+        100% {
+          background: #fff;
+          box-shadow: none;
+          transform: scale(1);
+        }
+      }
+
+      .plan-card {
+        margin-bottom: 12px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fbfdfc;
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .plan-card h3 {
+        margin-bottom: 8px;
+        font-size: 15px;
+      }
+
+      .plan-card ul,
+      .plan-card ol {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      @media (max-width: 380px) {
+        .app {
+          padding-right: 12px;
+          padding-left: 12px;
+        }
+
+        .top-bar {
+          margin-right: -12px;
+          margin-left: -12px;
+          padding-right: 12px;
+          padding-left: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="top-bar">
+        <button class="top-action left" id="leftAction" type="button"></button>
+        <h1 class="top-title" id="pageTitle">客户档案</h1>
+        <button class="top-action right" id="rightAction" type="button">新建</button>
+      </header>
+
+      <section class="screen active" id="homeScreen">
+        <div class="search-box">
+          <input id="clientSearch" type="search" placeholder="输入姓名查询" />
+        </div>
+        <div class="client-list" id="clientList"></div>
+      </section>
+
+      <section class="screen" id="formScreen">
+        <form id="archiveForm">
+          <section class="step">
+            <h2 class="step-title"><span class="num">1</span><span>客户信息</span></h2>
+            <div class="box">
+              <label class="info-row">
+                <span class="label-cell">姓名：</span>
+                <span class="value-cell"><input name="name" type="text" placeholder="请输入姓名" /></span>
+              </label>
+              <label class="info-row">
+                <span class="label-cell">联系电话：</span>
+                <span class="value-cell"><input name="phone" type="tel" inputmode="tel" placeholder="请输入手机号" /></span>
+              </label>
+              <label class="info-row">
+                <span class="label-cell">月收入：</span>
+                <span class="value-cell"><input name="monthlyIncome" type="text" inputmode="decimal" placeholder="请输入金额" /></span>
+              </label>
+              <div class="info-row">
+                <span class="label-cell">是否有房贷：</span>
+                <span class="value-cell">
+                  <span class="segmented" id="mortgageGroup">
+                    <button class="active" type="button" data-value="否">否</button>
+                    <button type="button" data-value="是">是</button>
+                  </span>
+                  <input name="hasMortgage" type="hidden" value="否" />
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section class="step">
+            <h2 class="step-title"><span class="num">2</span><span>债务明细</span><button class="step-add" id="addDebtBtn" type="button">+ 添加</button></h2>
+            <div class="table-box">
+              <div class="debt-head">
+                <span>类型</span>
+                <span>机构</span>
+                <span>金额</span>
+                <span>逾期</span>
+                <span>催收</span>
+              </div>
+              <div id="debtRows"></div>
+            </div>
+          </section>
+
+          <section class="step">
+            <h2 class="step-title"><span class="num">3</span><span>其他信息</span></h2>
+            <div class="box concern-box">
+              <div class="textarea-wrap">
+                <textarea name="biggestConcern" maxlength="200" placeholder="请输入客户最担心的问题或影响"></textarea>
+                <span class="counter" id="concernCounter">0/200</span>
+              </div>
+            </div>
+          </section>
+        </form>
+        <div class="bottom-action">
+          <button class="primary-btn" id="saveBtn" type="button">保存档案</button>
+        </div>
+      </section>
+
+      <section class="screen" id="detailScreen">
+        <div class="detail-block" id="detailSummary"></div>
+        <section class="step">
+          <h2 class="step-title"><span class="num">2</span><span>债务清单</span></h2>
+          <div class="table-box" id="detailDebtList"></div>
+        </section>
+        <div class="bottom-action">
+          <button class="primary-btn" id="generateBtn" type="button">生成方案</button>
+        </div>
+      </section>
+
+      <section class="screen" id="planScreen">
+        <article class="plan-card" id="planOutput"></article>
+        <div class="bottom-action">
+          <button class="primary-btn" id="savePlanBtn" type="button">保存方案</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const storageKey = "debtCustomerArchiveV150";
+      const oldKeys = [
+        "debtCustomerArchiveV130",
+        "debtCustomerArchiveV120",
+        "debtCustomerArchiveV110",
+        "debtOptimizationClientsSingleFile"
+      ];
+
+      const screens = {
+        home: document.querySelector("#homeScreen"),
+        form: document.querySelector("#formScreen"),
+        detail: document.querySelector("#detailScreen"),
+        plan: document.querySelector("#planScreen")
+      };
+      const pageTitle = document.querySelector("#pageTitle");
+      const leftAction = document.querySelector("#leftAction");
+      const rightAction = document.querySelector("#rightAction");
+      const clientSearch = document.querySelector("#clientSearch");
+      const clientList = document.querySelector("#clientList");
+      const archiveForm = document.querySelector("#archiveForm");
+      const mortgageGroup = document.querySelector("#mortgageGroup");
+      const debtRows = document.querySelector("#debtRows");
+      const concernField = archiveForm.elements.biggestConcern;
+      const concernCounter = document.querySelector("#concernCounter");
+      const saveBtn = document.querySelector("#saveBtn");
+      const generateBtn = document.querySelector("#generateBtn");
+      const savePlanBtn = document.querySelector("#savePlanBtn");
+      const detailSummary = document.querySelector("#detailSummary");
+      const detailDebtList = document.querySelector("#detailDebtList");
+      const planOutput = document.querySelector("#planOutput");
+
+      let currentScreen = "home";
+      let selectedClientId = null;
+      let editingClientId = null;
+      let debts = [];
+      let lastPlan = "";
+
+      function uid(prefix) {
+        return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function parseMoney(value) {
+        const raw = String(value || "").trim().replace(/,/g, "");
+        if (!raw) return 0;
+        const number = Number(raw.replace(/[^\d.]/g, ""));
+        if (!Number.isFinite(number)) return 0;
+        return raw.includes("万") ? number * 10000 : number;
+      }
+
+      function formatMoney(value) {
+        if (!Number.isFinite(value)) return "0";
+        if (Math.abs(value) >= 10000) return `${(value / 10000).toFixed(1)}万`;
+        return Math.round(value).toLocaleString("zh-CN");
+      }
+
+      function formatDateTime(value) {
+        const date = new Date(value);
+        if (!Number.isFinite(date.getTime())) return "未记录";
+        const pad = (number) => String(number).padStart(2, "0");
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      }
+
+      function loadClients() {
+        try {
+          return JSON.parse(localStorage.getItem(storageKey) || "[]");
+        } catch {
+          return [];
+        }
+      }
+
+      function saveClients(clients) {
+        localStorage.setItem(storageKey, JSON.stringify(clients));
+      }
+
+      function migrateClients() {
+        if (localStorage.getItem(storageKey)) return;
+        for (const key of oldKeys) {
+          let clients = [];
+          try {
+            clients = JSON.parse(localStorage.getItem(key) || "[]");
+          } catch {
+            clients = [];
+          }
+          if (!clients.length) continue;
+          saveClients(
+            clients.map((client) => ({
+              ...client,
+              id: client.id || uid("client"),
+              debts: (client.debts || []).map((debt) => ({
+                ...debt,
+                id: debt.id || uid("debt"),
+                type: normalizeDebtType(debt.type),
+                overdue: String(debt.overdue || "").includes("未") ? "未逾期" : "已逾期",
+                isCollected: debt.isCollected === "催收" || debt.isCollected === "是" ? "催收" : "未催收"
+              }))
+            }))
+          );
+          return;
+        }
+      }
+
+      function totalDebt(client) {
+        return (client.debts || []).reduce((sum, debt) => sum + parseMoney(debt.amount), 0);
+      }
+
+      function clearValidationErrors() {
+        archiveForm.querySelectorAll(".is-error").forEach((item) => item.classList.remove("is-error"));
+      }
+
+      function markValidationError(target) {
+        target?.classList.remove("is-error");
+        if (target) void target.offsetWidth;
+        target?.classList.add("is-error");
+        target?.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+
+      function tapButton(button) {
+        button.classList.remove("is-tapped");
+        void button.offsetWidth;
+        button.classList.add("is-tapped");
+      }
+
+      function showScreen(name) {
+        currentScreen = name;
+        Object.entries(screens).forEach(([screenName, screen]) => {
+          screen.classList.toggle("active", screenName === name);
+        });
+
+        leftAction.textContent = "";
+        rightAction.textContent = "";
+        leftAction.disabled = true;
+        rightAction.disabled = true;
+
+        if (name === "home") {
+          pageTitle.textContent = "客户档案";
+          rightAction.textContent = "+ 添加";
+          rightAction.disabled = false;
+          renderClientList();
+        }
+
+        if (name === "form") {
+          pageTitle.textContent = editingClientId ? "编辑客户" : "新建客户";
+          leftAction.textContent = "‹ 返回";
+          leftAction.disabled = false;
+        }
+
+        if (name === "detail") {
+          const client = getClient(selectedClientId);
+          pageTitle.textContent = client?.name || "客户详情";
+          leftAction.textContent = "‹ 返回";
+          rightAction.textContent = "编辑";
+          leftAction.disabled = false;
+          rightAction.disabled = false;
+          renderDetail();
+        }
+
+        if (name === "plan") {
+          pageTitle.textContent = "方案";
+          leftAction.textContent = "‹ 返回";
+          rightAction.textContent = "复制";
+          leftAction.disabled = false;
+          rightAction.disabled = false;
+        }
+      }
+
+      function getClient(clientId) {
+        return loadClients().find((client) => client.id === clientId);
+      }
+
+      function startNewClient() {
+        editingClientId = null;
+        selectedClientId = null;
+        archiveForm.reset();
+        mortgageGroup.querySelectorAll("button").forEach((button) => button.classList.toggle("active", button.dataset.value === "否"));
+        archiveForm.elements.hasMortgage.value = "否";
+        debts = [];
+        addDebt();
+        updateConcernCount();
+        clearValidationErrors();
+        showScreen("form");
+      }
+
+      function editClient(clientId) {
+        const client = getClient(clientId);
+        if (!client) return;
+        editingClientId = client.id;
+        selectedClientId = client.id;
+        archiveForm.elements.name.value = client.name || "";
+        archiveForm.elements.phone.value = client.phone || "";
+        archiveForm.elements.monthlyIncome.value = client.monthlyIncome || "";
+        archiveForm.elements.hasMortgage.value = client.hasMortgage || "否";
+        archiveForm.elements.biggestConcern.value = client.biggestConcern || "";
+        mortgageGroup.querySelectorAll("button").forEach((button) => {
+          button.classList.toggle("active", button.dataset.value === archiveForm.elements.hasMortgage.value);
+        });
+        debts = (client.debts || []).map((debt) => ({ ...debt, id: debt.id || uid("debt") }));
+        if (!debts.length) addDebt();
+        else renderDebts();
+        updateConcernCount();
+        clearValidationErrors();
+        showScreen("form");
+      }
+
+      function addDebt(data = {}) {
+        debts.push({
+          id: data.id || uid("debt"),
+          type: normalizeDebtType(data.type || "网贷"),
+          creditor: data.creditor || "",
+          amount: data.amount || "",
+          overdue: data.overdue === "已逾期" ? "已逾期" : "未逾期",
+          isCollected: data.isCollected === "催收" ? "催收" : "未催收"
+        });
+        renderDebts();
+      }
+
+      function normalizeDebtType(value) {
+        return ["网贷", "信用卡", "银行贷款"].includes(value) ? value : "网贷";
+      }
+
+      function updateDebt(id, field, value) {
+        debts = debts.map((debt) => (debt.id === id ? { ...debt, [field]: value } : debt));
+      }
+
+      function removeDebt(id) {
+        debts = debts.filter((debt) => debt.id !== id);
+        if (!debts.length) addDebt();
+        else renderDebts();
+      }
+
+      function renderDebts() {
+        debtRows.innerHTML = debts
+          .map(
+            (debt) => `
+              <div class="debt-line" data-id="${debt.id}">
+                <div class="debt-row" data-id="${debt.id}">
+                  <span class="select-cell">
+                    <select data-field="type">
+                      ${["网贷", "信用卡", "银行贷款"].map((item) => `<option value="${item}" ${debt.type === item ? "selected" : ""}>${item}</option>`).join("")}
+                    </select>
+                  </span>
+                  <input data-field="creditor" type="text" value="${escapeHtml(debt.creditor)}" />
+                  <input data-field="amount" type="text" inputmode="decimal" value="${escapeHtml(debt.amount)}" />
+                  <span class="select-cell">
+                    <select data-field="overdue">
+                      ${["未逾期", "已逾期"].map((item) => `<option value="${item}" ${debt.overdue === item ? "selected" : ""}>${item}</option>`).join("")}
+                    </select>
+                  </span>
+                  <span class="select-cell">
+                    <select data-field="isCollected">
+                      ${["未催收", "催收"].map((item) => `<option value="${item}" ${debt.isCollected === item ? "selected" : ""}>${item}</option>`).join("")}
+                    </select>
+                  </span>
+                </div>
+                <button class="debt-delete" type="button" data-action="delete-debt">删除</button>
+              </div>
+            `
+          )
+          .join("");
+      }
+
+      function buildArchive() {
+        const data = Object.fromEntries(new FormData(archiveForm).entries());
+        return {
+          id: editingClientId || uid("client"),
+          name: data.name.trim(),
+          phone: data.phone.trim(),
+          monthlyIncome: data.monthlyIncome.trim(),
+          hasMortgage: data.hasMortgage,
+          biggestConcern: data.biggestConcern.trim(),
+          debts: debts.filter((debt) => debt.creditor.trim() || debt.amount.trim()),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+      }
+
+      function validateArchive(archive) {
+        clearValidationErrors();
+        if (!archive.name) {
+          markValidationError(archiveForm.elements.name);
+          return false;
+        }
+        const firstInvalidDebt = debts.find(
+          (debt) => !debt.creditor.trim() && (debt.amount.trim() || archive.debts.length === 0)
+        );
+        if (firstInvalidDebt) {
+          markValidationError(debtRows.querySelector(`.debt-row[data-id="${firstInvalidDebt.id}"] input[data-field="creditor"]`));
+          return false;
+        }
+        return true;
+      }
+
+      function saveArchive() {
+        const archive = buildArchive();
+        if (!validateArchive(archive)) return;
+        const clients = loadClients();
+        const index = clients.findIndex((client) => client.id === archive.id || client.name === archive.name);
+        if (index >= 0) {
+          archive.id = clients[index].id;
+          archive.createdAt = clients[index].createdAt || archive.createdAt;
+          clients[index] = archive;
+        } else {
+          clients.push(archive);
+        }
+        saveClients(clients);
+        selectedClientId = archive.id;
+        editingClientId = null;
+        showScreen("detail");
+      }
+
+      function renderClientList() {
+        const query = clientSearch.value.trim().toLowerCase();
+        const clients = loadClients().sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+        const filtered = query ? clients.filter((client) => (client.name || "").toLowerCase().includes(query)) : clients;
+        if (!filtered.length) {
+          clientList.innerHTML = `<div class="empty">${query ? "没有找到这个客户。" : "还没有保存客户档案。"}</div>`;
+          return;
+        }
+        clientList.innerHTML = filtered
+          .map(
+            (client) => `
+              <div class="client-line" data-client-id="${client.id}">
+                <button class="client-card" type="button">
+                  <span class="client-main">
+                    <strong>${escapeHtml(client.name || "未命名客户")}</strong>
+                    <span class="client-time">录入时间：${formatDateTime(client.createdAt)}</span>
+                  </span>
+                  <span>电话：${escapeHtml(client.phone || "未填写")} · 总负债：${formatMoney(totalDebt(client))} · ${(client.debts || []).length} 笔债务</span>
+                </button>
+                <button class="client-edit" type="button" data-action="edit-client">编辑</button>
+                <button class="client-delete" type="button" data-action="delete-client">删除</button>
+              </div>
+            `
+          )
+          .join("");
+      }
+
+      function removeClient(clientId) {
+        const clients = loadClients().filter((client) => client.id !== clientId);
+        saveClients(clients);
+        if (selectedClientId === clientId) selectedClientId = null;
+        renderClientList();
+      }
+
+      function renderDetail() {
+        const client = getClient(selectedClientId);
+        if (!client) {
+          showScreen("home");
+          return;
+        }
+        detailSummary.innerHTML = `
+          <div class="detail-row"><span>姓名：</span><strong>${escapeHtml(client.name || "未填写")}</strong></div>
+          <div class="detail-row"><span>联系电话：</span><strong>${escapeHtml(client.phone || "未填写")}</strong></div>
+          <div class="detail-row"><span>月收入：</span><strong>${escapeHtml(client.monthlyIncome || "未填写")}</strong></div>
+          <div class="detail-row"><span>总负债：</span><strong>${formatMoney(totalDebt(client))}</strong></div>
+          <div class="detail-row"><span>最担心：</span><strong>${escapeHtml(client.biggestConcern || "未填写")}</strong></div>
+        `;
+        detailDebtList.innerHTML = `
+          <div class="debt-head"><span>类型</span><span>机构</span><span>金额</span><span>逾期</span><span>催收</span></div>
+          ${(client.debts || [])
+            .map(
+              (debt) => `
+                <div class="debt-row">
+                  <span>${escapeHtml(debt.type || "")}</span>
+                  <span>${escapeHtml(debt.creditor || "")}</span>
+                  <span>${formatMoney(parseMoney(debt.amount))}</span>
+                  <span>${escapeHtml(debt.overdue || "")}</span>
+                  <span>${escapeHtml(debt.isCollected || "")}</span>
+                </div>
+              `
+            )
+            .join("")}
+        `;
+      }
+
+      function createPlan(client) {
+        const total = totalDebt(client);
+        const income = parseMoney(client.monthlyIncome);
+        const overdueCount = (client.debts || []).filter((debt) => debt.overdue === "已逾期").length;
+        const collectedCount = (client.debts || []).filter((debt) => debt.isCollected === "催收").length;
+        const sorted = [...(client.debts || [])].sort((a, b) => {
+          const riskA = (a.overdue === "已逾期" ? 2 : 0) + (a.isCollected === "催收" ? 2 : 0) + parseMoney(a.amount) / (total || 1);
+          const riskB = (b.overdue === "已逾期" ? 2 : 0) + (b.isCollected === "催收" ? 2 : 0) + parseMoney(b.amount) / (total || 1);
+          return riskB - riskA;
+        });
+        return `
+          <div class="plan-card">
+            <h3>风险概览</h3>
+            <ul>
+              <li>总负债：${formatMoney(total)} 元。</li>
+              <li>逾期债务：${overdueCount} 笔，催收债务：${collectedCount} 笔。</li>
+              <li>建议月还款池：${formatMoney(Math.max(0, income * (client.hasMortgage === "是" ? 0.32 : 0.42) - 525))} 元。</li>
+            </ul>
+          </div>
+          <div class="plan-card">
+            <h3>优先顺序</h3>
+            <ol>
+              ${sorted.map((debt) => `<li>${escapeHtml(debt.creditor)}：${escapeHtml(debt.type)}，${formatMoney(parseMoney(debt.amount))} 元，${escapeHtml(debt.overdue)}，${escapeHtml(debt.isCollected)}。</li>`).join("")}
+            </ol>
+          </div>
+          <div class="plan-card">
+            <h3>行动计划</h3>
+            <ul>
+              <li>先整理合同、账单、还款日和催收记录。</li>
+              <li>优先处理已逾期、已催收、金额较大的债务。</li>
+              <li>停止以贷养贷，按月还款池执行。</li>
+            </ul>
+          </div>
+        `;
+      }
+
+      function generatePlan() {
+        const client = getClient(selectedClientId);
+        if (!client) return;
+        lastPlan = createPlan(client);
+        planOutput.innerHTML = lastPlan;
+        showScreen("plan");
+      }
+
+      function copyPlan() {
+        const text = planOutput.innerText.trim();
+        if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text);
+      }
+
+      function savePlan() {
+        const client = getClient(selectedClientId);
+        if (!client) return;
+        const clients = loadClients();
+        const index = clients.findIndex((item) => item.id === client.id);
+        if (index >= 0) {
+          clients[index].plan = lastPlan;
+          clients[index].updatedAt = new Date().toISOString();
+          saveClients(clients);
+        }
+        showScreen("detail");
+      }
+
+      leftAction.addEventListener("click", () => {
+        if (currentScreen === "form") {
+          if (editingClientId && selectedClientId) showScreen("detail");
+          else showScreen("home");
+        } else if (currentScreen === "detail") {
+          showScreen("home");
+        } else if (currentScreen === "plan") {
+          showScreen("detail");
+        }
+      });
+
+      rightAction.addEventListener("click", () => {
+        if (currentScreen === "home") startNewClient();
+        else if (currentScreen === "form") {
+          if (editingClientId && selectedClientId) showScreen("detail");
+          else showScreen("home");
+        } else if (currentScreen === "detail") editClient(selectedClientId);
+        else if (currentScreen === "plan") copyPlan();
+      });
+
+      clientSearch.addEventListener("input", renderClientList);
+      clientList.addEventListener("click", (event) => {
+        const line = event.target.closest(".client-line");
+        if (!line) return;
+        const action = event.target.closest("[data-action]");
+        if (action?.dataset.action === "edit-client") {
+          selectedClientId = line.dataset.clientId;
+          editClient(selectedClientId);
+          clientDidSwipe = false;
+          return;
+        }
+        if (action?.dataset.action === "delete-client") {
+          removeClient(line.dataset.clientId);
+          clientDidSwipe = false;
+          return;
+        }
+        if (clientDidSwipe) {
+          clientDidSwipe = false;
+          return;
+        }
+        if (line.classList.contains("open")) {
+          line.classList.remove("open");
+          return;
+        }
+        const card = event.target.closest(".client-card");
+        if (!card) return;
+        selectedClientId = line.dataset.clientId;
+        showScreen("detail");
+      });
+
+      archiveForm.addEventListener("submit", (event) => event.preventDefault());
+      document.querySelector("#addDebtBtn").addEventListener("click", () => addDebt());
+      saveBtn.addEventListener("click", () => {
+        tapButton(saveBtn);
+        saveArchive();
+      });
+      generateBtn.addEventListener("click", () => {
+        tapButton(generateBtn);
+        generatePlan();
+      });
+      savePlanBtn.addEventListener("click", () => {
+        tapButton(savePlanBtn);
+        savePlan();
+      });
+      concernField.addEventListener("input", updateConcernCount);
+
+      archiveForm.addEventListener("input", (event) => {
+        event.target.classList.remove("is-error");
+      });
+
+      mortgageGroup.addEventListener("click", (event) => {
+        const button = event.target.closest("button");
+        if (!button) return;
+        mortgageGroup.querySelectorAll("button").forEach((item) => item.classList.toggle("active", item === button));
+        archiveForm.elements.hasMortgage.value = button.dataset.value;
+      });
+
+      debtRows.addEventListener("input", (event) => {
+        const row = event.target.closest(".debt-row");
+        const field = event.target.dataset.field;
+        if (row && field) updateDebt(row.dataset.id, field, event.target.value);
+      });
+
+      debtRows.addEventListener("change", (event) => {
+        const row = event.target.closest(".debt-row");
+        const field = event.target.dataset.field;
+        if (row && field) updateDebt(row.dataset.id, field, event.target.value);
+      });
+
+      debtRows.addEventListener("click", (event) => {
+        const line = event.target.closest(".debt-line");
+        if (line && event.target.closest("[data-action='delete-debt']")) removeDebt(line.dataset.id);
+      });
+
+      let swipeStartX = 0;
+      let swipeTarget = null;
+      let clientSwipeStartX = 0;
+      let clientSwipeTarget = null;
+      let clientDidSwipe = false;
+
+      function openClientActions(target) {
+        document.querySelectorAll(".client-line.open").forEach((row) => {
+          if (row !== target) row.classList.remove("open");
+        });
+        target.classList.add("open");
+      }
+
+      function handleClientSwipe(endX) {
+        if (!clientSwipeTarget) return;
+        const distance = endX - clientSwipeStartX;
+        if (distance < -28) {
+          clientDidSwipe = true;
+          openClientActions(clientSwipeTarget);
+        }
+        if (distance > 28) {
+          clientDidSwipe = true;
+          clientSwipeTarget.classList.remove("open");
+        }
+        clientSwipeTarget = null;
+      }
+
+      clientList.addEventListener("pointerdown", (event) => {
+        clientSwipeTarget = event.target.closest(".client-line");
+        clientSwipeStartX = event.clientX;
+        clientDidSwipe = false;
+      });
+
+      clientList.addEventListener("pointerup", (event) => {
+        handleClientSwipe(event.clientX);
+      });
+
+      clientList.addEventListener("touchstart", (event) => {
+        clientSwipeTarget = event.target.closest(".client-line");
+        clientSwipeStartX = event.changedTouches[0].clientX;
+        clientDidSwipe = false;
+      }, { passive: true });
+
+      clientList.addEventListener("touchend", (event) => {
+        handleClientSwipe(event.changedTouches[0].clientX);
+      });
+
+      function openDebtActions(target) {
+        document.querySelectorAll(".debt-line.open").forEach((row) => {
+          if (row !== target) row.classList.remove("open");
+        });
+        target.classList.add("open");
+      }
+
+      function handleDebtSwipe(endX) {
+        if (!swipeTarget) return;
+        const distance = endX - swipeStartX;
+        if (distance < -28) openDebtActions(swipeTarget);
+        if (distance > 28) swipeTarget.classList.remove("open");
+        swipeTarget = null;
+      }
+
+      debtRows.addEventListener("pointerdown", (event) => {
+        swipeTarget = event.target.closest(".debt-line");
+        swipeStartX = event.clientX;
+      });
+
+      debtRows.addEventListener("pointerup", (event) => {
+        handleDebtSwipe(event.clientX);
+      });
+
+      debtRows.addEventListener("touchstart", (event) => {
+        swipeTarget = event.target.closest(".debt-line");
+        swipeStartX = event.changedTouches[0].clientX;
+      }, { passive: true });
+
+      debtRows.addEventListener("touchend", (event) => {
+        handleDebtSwipe(event.changedTouches[0].clientX);
+      });
+
+      function updateConcernCount() {
+        concernCounter.textContent = `${concernField.value.length}/200`;
+      }
+
+      migrateClients();
+      renderClientList();
+      showScreen("home");
+    </script>
+  </body>
+</html>
