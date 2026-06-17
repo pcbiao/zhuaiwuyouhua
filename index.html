@@ -3,112 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>债务优化客户档案</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <meta http-equiv="refresh" content="0; url=./债务客户档案%20v%201.0.4.html" />
+    <title>债务客户档案</title>
+    <script>
+      window.location.replace("./债务客户档案%20v%201.0.4.html");
+    </script>
   </head>
   <body>
-    <main class="app-shell">
-      <header class="app-header">
-        <div>
-          <p class="app-kicker" id="viewKicker">客户录入</p>
-          <h1 id="viewTitle">保存客户信息</h1>
-        </div>
-        <button class="primary" id="saveInfoBtn" type="button">保存信息</button>
-      </header>
-
-      <section class="app-content">
-        <form class="app-view is-active" id="clientForm" data-view="entry">
-          <section class="screen-card">
-            <div class="card-head">
-              <h2>客户信息</h2>
-              <p>填写后保存到客户库，再进入详情生成方案。</p>
-            </div>
-            <div class="field-list">
-              <label>姓名<input name="name" type="text" placeholder="例如：张先生" /></label>
-              <label>月收入<input name="monthlyIncome" type="text" inputmode="decimal" placeholder="例如：18000" /></label>
-              <label class="date-field">
-                还款日
-                <span class="date-selects">
-                  <select id="paymentYear" aria-label="还款年"></select>
-                  <select id="paymentMonth" aria-label="还款月"></select>
-                  <select id="paymentDay" aria-label="还款日"></select>
-                  <input name="paymentDate" type="hidden" />
-                </span>
-              </label>
-              <label>是否有房贷<select name="hasMortgage"><option value="否">否</option><option value="是">是</option></select></label>
-              <label>总负债<input name="totalDebt" type="text" inputmode="decimal" placeholder="例如：320000" /></label>
-              <label>信用卡<input name="creditCard" type="text" inputmode="decimal" placeholder="例如：120000" /></label>
-              <label>网贷<input name="onlineLoan" type="text" inputmode="decimal" placeholder="例如：90000" /></label>
-              <label>银行贷款<input name="bankLoan" type="text" inputmode="decimal" placeholder="例如：110000" /></label>
-              <label>最大欠款银行<input name="largestBank" type="text" placeholder="例如：招商银行" /></label>
-              <label>最大欠款平台<input name="largestPlatform" type="text" placeholder="例如：某消费金融" /></label>
-              <label>逾期多久<input name="overdue" type="text" placeholder="例如：45天 / 2个月 / 未逾期" /></label>
-              <label>是否被催收<select name="isCollected"><option value="否">否</option><option value="是">是</option></select></label>
-              <label class="textarea-field">最担心什么<textarea name="biggestConcern" rows="3" placeholder="例如：被起诉、影响家人、工资卡被冻结"></textarea></label>
-            </div>
-          </section>
-
-          <p class="status-line" id="clientSaveStatus">客户资料保存在本机浏览器。</p>
-        </form>
-
-        <section class="app-view" data-view="library">
-          <section class="screen-card">
-            <div class="card-head library-head">
-              <div>
-                <h2>客户库</h2>
-                <p>按姓名查询，点击客户进入详情。</p>
-              </div>
-              <span id="clientCount">0 位</span>
-            </div>
-            <label class="search-field">查询姓名<input id="clientSearchInput" type="search" placeholder="输入姓名，例如：张" /></label>
-          </section>
-          <div class="client-list" id="clientList"></div>
-        </section>
-
-        <section class="app-view" data-view="detail">
-          <section class="screen-card">
-            <div class="detail-hero">
-              <button class="back-btn" id="backToLibraryBtn" type="button">返回</button>
-              <div>
-                <p>客户详情</p>
-                <h2 id="detailName">未选择客户</h2>
-              </div>
-            </div>
-            <div class="detail-actions">
-              <button class="ghost" id="editClientBtn" type="button">编辑资料</button>
-              <button class="primary" id="generatePlanBtn" type="button">生成方案</button>
-              <button class="danger-btn" id="deleteClientBtn" type="button">删除客户</button>
-            </div>
-          </section>
-
-          <section class="screen-card">
-            <div class="card-head">
-              <h2>档案信息</h2>
-              <p id="detailUpdatedAt">请选择客户。</p>
-            </div>
-            <div class="detail-grid" id="detailFields"></div>
-          </section>
-
-          <section class="screen-card">
-            <div class="card-head split-head">
-              <div>
-                <h2>债务优化方案</h2>
-                <p>从客户详情生成，便于一人一档。</p>
-              </div>
-              <button class="ghost small" id="copyPlanBtn" type="button">复制方案</button>
-            </div>
-            <div class="plan-empty" id="emptyState">点击“生成方案”后，这里会显示风险等级、优先顺序和 90 天动作。</div>
-            <article class="plan" id="planOutput" hidden></article>
-          </section>
-        </section>
-      </section>
-
-      <nav class="bottom-nav" aria-label="底部导航">
-        <button class="nav-btn is-active" type="button" data-target-view="entry">录入</button>
-        <button class="nav-btn" type="button" data-target-view="library">客户库</button>
-      </nav>
-    </main>
-
-    <script src="./app.js?v=20260609-date-selects"></script>
+    <p><a href="./债务客户档案%20v%201.0.4.html">打开债务客户档案</a></p>
   </body>
 </html>
