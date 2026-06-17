@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>债务客户档案 v 1.0.1</title>
+    <title>债务客户档案 v 1.0.4</title>
     <style>
       :root {
         color-scheme: light;
@@ -79,7 +79,7 @@
       }
 
       .top-title::after {
-        content: "1.0.1";
+        content: "1.0.4";
         display: inline-flex;
         align-items: center;
         margin-left: 6px;
@@ -151,7 +151,7 @@
       }
 
       textarea {
-        min-height: 84px;
+        min-height: 106px;
         padding: 10px;
         resize: none;
         font-size: 12px;
@@ -182,7 +182,7 @@
         z-index: 1;
         width: 100%;
         min-height: 56px;
-        padding: 10px 10px 10px 16px;
+        padding: 10px 10px 10px 24px;
         border-bottom: 1px solid var(--line);
         background: #fff;
         text-align: left;
@@ -227,7 +227,7 @@
 
       .client-card .client-main {
         display: grid;
-        grid-template-columns: 78px max-content;
+        grid-template-columns: 78px 1fr;
         column-gap: 16px;
         align-items: center;
         margin-bottom: 5px;
@@ -247,6 +247,7 @@
         white-space: nowrap;
       }
 
+
       .client-card span,
       .empty {
         display: block;
@@ -255,8 +256,42 @@
         line-height: 1.5;
       }
 
+      .client-card .due-alert,
+      .due-alert {
+        color: var(--danger);
+        font-weight: 760;
+      }
+
       .empty {
         padding: 14px 10px;
+      }
+
+      .data-tools {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 12px;
+        margin-top: 10px;
+        padding-right: 16px;
+      }
+
+      .data-tools button {
+        min-height: 26px;
+        padding: 0;
+        background: transparent;
+        color: var(--teal);
+        font-size: 12px;
+        font-weight: 820;
+      }
+
+      .data-separator {
+        width: 1px;
+        height: 12px;
+        background: var(--line);
+      }
+
+      .backup-input {
+        display: none;
       }
 
       .step {
@@ -384,7 +419,7 @@
       .debt-head,
       .debt-row {
         display: grid;
-        grid-template-columns: 0.98fr 1.26fr 1.2fr 0.78fr 0.78fr;
+        grid-template-columns: 0.9fr 1.2fr 0.9fr 0.84fr 1.16fr;
         align-items: center;
       }
 
@@ -465,6 +500,23 @@
         background: var(--teal-soft);
         color: var(--muted);
         text-align: center;
+      }
+
+      .select-cell select.is-overdue,
+      .select-cell select option.is-overdue,
+      .debt-row .is-overdue {
+        color: var(--danger);
+      }
+
+      .date-cell input {
+        border-radius: 6px;
+        background: var(--teal-soft);
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .date-cell input::-webkit-calendar-picker-indicator {
+        display: none;
       }
 
       .debt-row input {
@@ -599,6 +651,12 @@
           <input id="clientSearch" type="search" placeholder="输入姓名查询" />
         </div>
         <div class="client-list" id="clientList"></div>
+        <div class="data-tools">
+          <button id="importBtn" type="button">导入</button>
+          <span class="data-separator" aria-hidden="true"></span>
+          <button id="exportBtn" type="button">导出</button>
+        </div>
+        <input class="backup-input" id="backupFileInput" type="file" accept="application/json,.json" />
       </section>
 
       <section class="screen" id="formScreen">
@@ -637,9 +695,9 @@
               <div class="debt-head">
                 <span>类型</span>
                 <span>机构</span>
-                <span>金额</span>
-                <span>逾期</span>
-                <span>催收</span>
+                <span>金额(万)</span>
+                <span>状态</span>
+                <span>到期日期</span>
               </div>
               <div id="debtRows"></div>
             </div>
@@ -699,6 +757,9 @@
       const rightAction = document.querySelector("#rightAction");
       const clientSearch = document.querySelector("#clientSearch");
       const clientList = document.querySelector("#clientList");
+      const importBtn = document.querySelector("#importBtn");
+      const exportBtn = document.querySelector("#exportBtn");
+      const backupFileInput = document.querySelector("#backupFileInput");
       const archiveForm = document.querySelector("#archiveForm");
       const mortgageGroup = document.querySelector("#mortgageGroup");
       const debtRows = document.querySelector("#debtRows");
@@ -716,6 +777,7 @@
       let editingClientId = null;
       let debts = [];
       let lastPlan = "";
+      const debtStatusOptions = ["正常", "逾期", "催收", "协商", "结清"];
 
       function uid(prefix) {
         return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -744,11 +806,76 @@
         return Math.round(value).toLocaleString("zh-CN");
       }
 
+      function parseDebtAmount(value) {
+        const raw = String(value || "").trim().replace(/,/g, "");
+        if (!raw) return 0;
+        if (raw.includes("万")) return parseMoney(raw);
+        const number = Number(raw.replace(/[^\d.]/g, ""));
+        if (!Number.isFinite(number)) return 0;
+        return number >= 10000 ? number : number * 10000;
+      }
+
       function formatDateTime(value) {
         const date = new Date(value);
         if (!Number.isFinite(date.getTime())) return "未记录";
         const pad = (number) => String(number).padStart(2, "0");
         return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      }
+
+      function normalizeDebtStatus(debt = {}) {
+        const value = debt.status || debt.overdue || "";
+        if (value === "催收" || value === "协商" || value === "结清") return value;
+        if (value === "逾期" || value === "已逾期") return "逾期";
+        const days = daysUntilDue(debt.dueDate);
+        if (days !== null && days <= 0) return "逾期";
+        return "正常";
+      }
+
+      function isRiskStatus(status) {
+        return status === "逾期" || status === "催收";
+      }
+
+      function displayDueDate(value) {
+        return String(value || "").trim() || "未填写";
+      }
+
+      function parseDueDate(value) {
+        const date = new Date(`${value}T00:00:00`);
+        return Number.isFinite(date.getTime()) ? date : null;
+      }
+
+      function daysUntilDue(value) {
+        const date = parseDueDate(value);
+        if (!date) return null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return Math.ceil((date - today) / 86400000);
+      }
+
+      function isDueAlert(debt) {
+        const days = daysUntilDue(debt?.dueDate);
+        return days !== null && days <= 30;
+      }
+
+      function dueAlertText(debt) {
+        const days = daysUntilDue(debt?.dueDate);
+        if (days === null || days > 30) return "";
+        const creditor = debt.creditor || "未填写机构";
+        if (days < 0) return `${creditor} 已过期${Math.abs(days)}天`;
+        if (days === 0) return `${creditor} 今天到期`;
+        return `${creditor} ${days}天后到期`;
+      }
+
+      function clientDueAlert(client) {
+        const alerts = (client.debts || [])
+          .filter(isDueAlert)
+          .sort((a, b) => (daysUntilDue(a.dueDate) ?? 9999) - (daysUntilDue(b.dueDate) ?? 9999));
+        return alerts[0] ? dueAlertText(alerts[0]) : "";
+      }
+
+      function formatDebtAmountInput(value) {
+        const amount = parseDebtAmount(value);
+        return amount > 0 ? (amount / 10000).toFixed(1) : String(value || "").trim();
       }
 
       function loadClients() {
@@ -761,6 +888,35 @@
 
       function saveClients(clients) {
         localStorage.setItem(storageKey, JSON.stringify(clients));
+      }
+
+      function normalizeImportedClient(client) {
+        const now = new Date().toISOString();
+        return {
+          id: client.id || uid("client"),
+          name: String(client.name || "").trim(),
+          phone: String(client.phone || "").trim(),
+          monthlyIncome: String(client.monthlyIncome || "").trim(),
+          hasMortgage: client.hasMortgage === "是" ? "是" : "否",
+          biggestConcern: String(client.biggestConcern || "").trim(),
+          debts: (Array.isArray(client.debts) ? client.debts : []).map((debt) => ({
+            id: debt.id || uid("debt"),
+            type: normalizeDebtType(debt.type),
+            creditor: String(debt.creditor || "").trim(),
+            amount: String(debt.amount || "").trim(),
+            status: normalizeDebtStatus(debt),
+            dueDate: String(debt.dueDate || "").trim()
+          })),
+          createdAt: client.createdAt || now,
+          updatedAt: client.updatedAt || now,
+          plan: client.plan || ""
+        };
+      }
+
+      function readBackupClients(data) {
+        const clients = Array.isArray(data) ? data : data?.clients;
+        if (!Array.isArray(clients)) return null;
+        return clients.map(normalizeImportedClient);
       }
 
       function migrateClients() {
@@ -781,8 +937,8 @@
                 ...debt,
                 id: debt.id || uid("debt"),
                 type: normalizeDebtType(debt.type),
-                overdue: String(debt.overdue || "").includes("未") ? "未逾期" : "已逾期",
-                isCollected: debt.isCollected === "催收" || debt.isCollected === "是" ? "催收" : "未催收"
+                status: normalizeDebtStatus(debt),
+                dueDate: String(debt.dueDate || "").trim()
               }))
             }))
           );
@@ -791,7 +947,7 @@
       }
 
       function totalDebt(client) {
-        return (client.debts || []).reduce((sum, debt) => sum + parseMoney(debt.amount), 0);
+        return (client.debts || []).reduce((sum, debt) => sum + parseDebtAmount(debt.amount), 0);
       }
 
       function clearValidationErrors() {
@@ -884,7 +1040,12 @@
         mortgageGroup.querySelectorAll("button").forEach((button) => {
           button.classList.toggle("active", button.dataset.value === archiveForm.elements.hasMortgage.value);
         });
-        debts = (client.debts || []).map((debt) => ({ ...debt, id: debt.id || uid("debt") }));
+        debts = (client.debts || []).map((debt) => ({
+          ...debt,
+          id: debt.id || uid("debt"),
+          status: normalizeDebtStatus(debt),
+          dueDate: debt.dueDate || ""
+        }));
         if (!debts.length) addDebt();
         else renderDebts();
         updateConcernCount();
@@ -898,8 +1059,8 @@
           type: normalizeDebtType(data.type || "网贷"),
           creditor: data.creditor || "",
           amount: data.amount || "",
-          overdue: data.overdue === "已逾期" ? "已逾期" : "未逾期",
-          isCollected: data.isCollected === "催收" ? "催收" : "未催收"
+          status: normalizeDebtStatus(data),
+          dueDate: data.dueDate || ""
         });
         renderDebts();
       }
@@ -930,16 +1091,14 @@
                     </select>
                   </span>
                   <input data-field="creditor" type="text" value="${escapeHtml(debt.creditor)}" />
-                  <input data-field="amount" type="text" inputmode="decimal" value="${escapeHtml(debt.amount)}" />
+                  <input data-field="amount" type="text" inputmode="decimal" value="${escapeHtml(formatDebtAmountInput(debt.amount))}" />
                   <span class="select-cell">
-                    <select data-field="overdue">
-                      ${["未逾期", "已逾期"].map((item) => `<option value="${item}" ${debt.overdue === item ? "selected" : ""}>${item}</option>`).join("")}
+                    <select data-field="status" class="${isRiskStatus(normalizeDebtStatus(debt)) ? "is-overdue" : ""}">
+                      ${debtStatusOptions.map((item) => `<option value="${item}" class="${isRiskStatus(item) ? "is-overdue" : ""}" ${normalizeDebtStatus(debt) === item ? "selected" : ""}>${item}</option>`).join("")}
                     </select>
                   </span>
-                  <span class="select-cell">
-                    <select data-field="isCollected">
-                      ${["未催收", "催收"].map((item) => `<option value="${item}" ${debt.isCollected === item ? "selected" : ""}>${item}</option>`).join("")}
-                    </select>
+                  <span class="date-cell">
+                    <input data-field="dueDate" type="date" value="${escapeHtml(debt.dueDate || "")}" />
                   </span>
                 </div>
                 <button class="debt-delete" type="button" data-action="delete-debt">删除</button>
@@ -958,7 +1117,9 @@
           monthlyIncome: data.monthlyIncome.trim(),
           hasMortgage: data.hasMortgage,
           biggestConcern: data.biggestConcern.trim(),
-          debts: debts.filter((debt) => debt.creditor.trim() || debt.amount.trim()),
+          debts: debts
+            .filter((debt) => debt.creditor.trim() || debt.amount.trim())
+            .map((debt) => ({ ...debt, status: normalizeDebtStatus(debt) })),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
@@ -1008,19 +1169,23 @@
         }
         clientList.innerHTML = filtered
           .map(
-            (client) => `
-              <div class="client-line" data-client-id="${client.id}">
-                <button class="client-card" type="button">
-                  <span class="client-main">
-                    <strong>${escapeHtml(client.name || "未命名客户")}</strong>
-                    <span class="client-time">录入时间：${formatDateTime(client.createdAt)}</span>
-                  </span>
-                  <span>电话：${escapeHtml(client.phone || "未填写")} · 总负债：${formatMoney(totalDebt(client))} · ${(client.debts || []).length} 笔债务</span>
-                </button>
-                <button class="client-edit" type="button" data-action="edit-client">编辑</button>
-                <button class="client-delete" type="button" data-action="delete-client">删除</button>
-              </div>
-            `
+            (client) => {
+              const alert = clientDueAlert(client);
+              return `
+                <div class="client-line" data-client-id="${client.id}">
+                  <button class="client-card" type="button">
+                    <span class="client-main">
+                      <strong>${escapeHtml(client.name || "未命名客户")}</strong>
+                      <span class="client-time">录入时间：${formatDateTime(client.createdAt)}</span>
+                    </span>
+                    <span>电话：${escapeHtml(client.phone || "未填写")} · 总负债：${formatMoney(totalDebt(client))} · ${(client.debts || []).length} 笔债务</span>
+                    ${alert ? `<span class="due-alert">${escapeHtml(alert)}</span>` : ""}
+                  </button>
+                  <button class="client-edit" type="button" data-action="edit-client">编辑</button>
+                  <button class="client-delete" type="button" data-action="delete-client">删除</button>
+                </div>
+              `;
+            }
           )
           .join("");
       }
@@ -1046,16 +1211,16 @@
           <div class="detail-row"><span>最担心：</span><strong>${escapeHtml(client.biggestConcern || "未填写")}</strong></div>
         `;
         detailDebtList.innerHTML = `
-          <div class="debt-head"><span>类型</span><span>机构</span><span>金额</span><span>逾期</span><span>催收</span></div>
+          <div class="debt-head"><span>类型</span><span>机构</span><span>金额(万)</span><span>状态</span><span>到期日期</span></div>
           ${(client.debts || [])
             .map(
               (debt) => `
                 <div class="debt-row">
                   <span>${escapeHtml(debt.type || "")}</span>
                   <span>${escapeHtml(debt.creditor || "")}</span>
-                  <span>${formatMoney(parseMoney(debt.amount))}</span>
-                  <span>${escapeHtml(debt.overdue || "")}</span>
-                  <span>${escapeHtml(debt.isCollected || "")}</span>
+                  <span>${escapeHtml(formatDebtAmountInput(debt.amount))}</span>
+                  <span class="${isRiskStatus(normalizeDebtStatus(debt)) ? "is-overdue" : ""}">${escapeHtml(normalizeDebtStatus(debt))}</span>
+                  <span class="${isDueAlert(debt) ? "due-alert" : ""}">${escapeHtml(displayDueDate(debt.dueDate))}</span>
                 </div>
               `
             )
@@ -1066,11 +1231,10 @@
       function createPlan(client) {
         const total = totalDebt(client);
         const income = parseMoney(client.monthlyIncome);
-        const overdueCount = (client.debts || []).filter((debt) => debt.overdue === "已逾期").length;
-        const collectedCount = (client.debts || []).filter((debt) => debt.isCollected === "催收").length;
+        const overdueCount = (client.debts || []).filter((debt) => normalizeDebtStatus(debt) === "逾期").length;
         const sorted = [...(client.debts || [])].sort((a, b) => {
-          const riskA = (a.overdue === "已逾期" ? 2 : 0) + (a.isCollected === "催收" ? 2 : 0) + parseMoney(a.amount) / (total || 1);
-          const riskB = (b.overdue === "已逾期" ? 2 : 0) + (b.isCollected === "催收" ? 2 : 0) + parseMoney(b.amount) / (total || 1);
+          const riskA = (isRiskStatus(normalizeDebtStatus(a)) ? 2 : 0) + parseDebtAmount(a.amount) / (total || 1);
+          const riskB = (isRiskStatus(normalizeDebtStatus(b)) ? 2 : 0) + parseDebtAmount(b.amount) / (total || 1);
           return riskB - riskA;
         });
         return `
@@ -1078,21 +1242,21 @@
             <h3>风险概览</h3>
             <ul>
               <li>总负债：${formatMoney(total)} 元。</li>
-              <li>逾期债务：${overdueCount} 笔，催收债务：${collectedCount} 笔。</li>
+              <li>逾期债务：${overdueCount} 笔。</li>
               <li>建议月还款池：${formatMoney(Math.max(0, income * (client.hasMortgage === "是" ? 0.32 : 0.42) - 525))} 元。</li>
             </ul>
           </div>
           <div class="plan-card">
             <h3>优先顺序</h3>
             <ol>
-              ${sorted.map((debt) => `<li>${escapeHtml(debt.creditor)}：${escapeHtml(debt.type)}，${formatMoney(parseMoney(debt.amount))} 元，${escapeHtml(debt.overdue)}，${escapeHtml(debt.isCollected)}。</li>`).join("")}
+              ${sorted.map((debt) => `<li>${escapeHtml(debt.creditor)}：${escapeHtml(debt.type)}，${formatMoney(parseDebtAmount(debt.amount))} 元，${escapeHtml(normalizeDebtStatus(debt))}，到期日期：${escapeHtml(displayDueDate(debt.dueDate))}。</li>`).join("")}
             </ol>
           </div>
           <div class="plan-card">
             <h3>行动计划</h3>
             <ul>
               <li>先整理合同、账单、还款日和催收记录。</li>
-              <li>优先处理已逾期、已催收、金额较大的债务。</li>
+              <li>优先处理逾期、到期临近、金额较大的债务。</li>
               <li>停止以贷养贷，按月还款池执行。</li>
             </ul>
           </div>
@@ -1125,6 +1289,57 @@
         showScreen("detail");
       }
 
+      function exportBackup() {
+        const pad = (number) => String(number).padStart(2, "0");
+        const now = new Date();
+        const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+        const backup = {
+          app: "debt-customer-archive",
+          version: "1.0.4",
+          storageKey,
+          exportedAt: now.toISOString(),
+          clients: loadClients()
+        };
+        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `债务客户档案-${stamp}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        window.alert("导出完成，请在浏览器下载记录中查看 JSON 文件。");
+      }
+
+      function importBackup(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+          try {
+            const imported = readBackupClients(JSON.parse(reader.result));
+            if (!imported) throw new Error("invalid backup");
+            const message = `将导入 ${imported.length} 个客户档案，并覆盖当前本机档案。是否继续？`;
+            if (!window.confirm(message)) return;
+            saveClients(imported);
+            selectedClientId = null;
+            editingClientId = null;
+            renderClientList();
+            showScreen("home");
+            window.alert("导入完成");
+          } catch {
+            window.alert("导入失败，请选择有效的客户档案 JSON 文件。");
+          } finally {
+            backupFileInput.value = "";
+          }
+        });
+        reader.addEventListener("error", () => {
+          backupFileInput.value = "";
+          window.alert("读取文件失败，请重新选择。");
+        });
+        reader.readAsText(file);
+      }
+
       leftAction.addEventListener("click", () => {
         if (currentScreen === "form") {
           if (editingClientId && selectedClientId) showScreen("detail");
@@ -1146,6 +1361,10 @@
       });
 
       clientSearch.addEventListener("input", renderClientList);
+      exportBtn.addEventListener("click", exportBackup);
+      importBtn.addEventListener("click", () => backupFileInput.click());
+      backupFileInput.addEventListener("change", () => importBackup(backupFileInput.files[0]));
+
       clientList.addEventListener("click", (event) => {
         const line = event.target.closest(".client-line");
         if (!line) return;
@@ -1212,9 +1431,22 @@
         const row = event.target.closest(".debt-row");
         const field = event.target.dataset.field;
         if (row && field) updateDebt(row.dataset.id, field, event.target.value);
+        if (field === "status") event.target.classList.toggle("is-overdue", isRiskStatus(event.target.value));
+        if (field === "dueDate") renderDebts();
+      });
+
+      debtRows.addEventListener("focusout", (event) => {
+        const row = event.target.closest(".debt-row");
+        if (!row || event.target.dataset.field !== "amount") return;
+        const formatted = formatDebtAmountInput(event.target.value);
+        event.target.value = formatted;
+        updateDebt(row.dataset.id, "amount", formatted);
       });
 
       debtRows.addEventListener("click", (event) => {
+        if (event.target.dataset.field === "dueDate" && typeof event.target.showPicker === "function") {
+          event.target.showPicker();
+        }
         const line = event.target.closest(".debt-line");
         if (line && event.target.closest("[data-action='delete-debt']")) removeDebt(line.dataset.id);
       });

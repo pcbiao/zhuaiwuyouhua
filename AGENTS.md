@@ -2,7 +2,7 @@
 
 ## 当前主文件
 
-- 当前正在开发和测试的单文件版本是：`债务客户档案 v 1.0.1.html`
+- 当前正在开发和测试的单文件版本是：`债务客户档案 v 1.0.4.html`
 - 浏览器应打开这个文件继续测试。
 - 旧文件 `债务客户档案.html` 已经重命名，不要继续修改旧文件名。
 - `index.html`、`app.js`、`styles.css` 是早期拆分版/旧版文件，当前主要迭代以单文件 HTML 为准。
@@ -188,6 +188,7 @@ debtCustomerArchiveV150
 - 表格视觉统一，行高和字体尽量一致
 - 手动输入字段黑色，选择字段灰色
 - 顶部/标题右侧的添加按钮采用 A 方案：无底色文字按钮 `+ 添加`
+- 当用户说“画给我看”时，表示要用绘图/图片方式画出界面效果预览，不要只用文字框图、ASCII 图或思维导图代替；如果是在讨论 UI 方案，应优先生成接近手机 App 界面的视觉稿。
 
 颜色和视觉：
 
@@ -196,19 +197,27 @@ debtCustomerArchiveV150
 - 灰色文字：`--muted`
 - 红色删除/错误：`--danger`
 
+## 沟通偏好
+
+- 默认简洁中文回复。
+- 讨论产品/UI/交互方案时，直接说结论和理由，不要主动拉代码或展示代码片段。
+- 除非用户明确要求“看代码/怎么实现/开始改”，否则先停留在产品讨论层面。
+- 能用一句话说清的，不要展开成长篇分析。
+- 给方案时优先说推荐方案；备选方案最多 1 个。
+
 ## 开发注意事项
 
 - 手动改文件使用 `apply_patch`。
 - 当前主文件名带空格，命令中要加引号：
 
 ```bash
-'债务客户档案 v 1.0.1.html'
+'债务客户档案 v 1.0.4.html'
 ```
 
 - 修改后至少运行内嵌脚本检查：
 
 ```bash
-node -e "const fs=require('fs'); const html=fs.readFileSync('债务客户档案 v 1.0.1.html','utf8'); const scripts=[...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)].map(m=>m[1]); new Function(scripts.join('\\n')); console.log('embedded script ok')"
+node -e "const fs=require('fs'); const html=fs.readFileSync('债务客户档案 v 1.0.4.html','utf8'); const scripts=[...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)].map(m=>m[1]); new Function(scripts.join('\\n')); console.log('embedded script ok')"
 ```
 
 - 如果只是 CSS/HTML 小改，也建议跑上面的检查。
