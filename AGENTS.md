@@ -67,6 +67,17 @@
 - 如果用户没有明确要求升级版本，普通小修改可以先不改文件名；当用户要求“给单文件测试/更新版本/重命名版本”时再执行版本命名更新。
 - 重命名后，浏览器中旧路径不会自动跳到新文件，需要提醒用户打开最新文件。
 
+## GitHub 发布和首页关系
+
+- GitHub 仓库地址：`https://github.com/pcbiao/zhuaiwuyouhua`
+- GitHub Pages 网页地址：`https://pcbiao.github.io/zhuaiwuyouhua/`
+- 别人访问 GitHub Pages 网页时，访问的是 GitHub 服务器上的文件，不是访问本机电脑。
+- `index.html` 是 GitHub Pages 的固定首页入口文件，需要本地维护并提交到 GitHub，GitHub 不会自动生成。
+- 当前 `index.html` 是跳转页，会跳转到当前单文件版本，例如 `债务客户档案 v 1.0.4.html`。
+- 如果单文件版本号更新，`index.html` 不会自动跟着更新，必须同步修改跳转地址。
+- 用户说“同步首页”时，意思是更新本地 `index.html`，让它指向最新单文件版本；提交并推送后，GitHub Pages 网页才会打开新版。
+- 推荐发布流程：先修改和测试最新单文件，再同步 `index.html`，最后提交并推送到 GitHub。
+
 ## 当前页面结构
 
 单文件内有 4 个主要页面，通过 `showScreen(name)` 切换：

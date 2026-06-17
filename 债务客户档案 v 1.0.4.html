@@ -1587,7 +1587,7 @@
           const className = statusClass(event.target.value);
           if (className) event.target.classList.add(className);
         }
-        if (field === "dueDate") renderDebts();
+        if (field === "type" || field === "dueDate") renderDebts();
       });
 
       debtRows.addEventListener("focusout", (event) => {
