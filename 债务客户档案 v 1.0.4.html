@@ -144,9 +144,9 @@
 
       input,
       select {
-        min-height: 38px;
+        min-height: 40px;
         padding: 0 10px;
-        font-size: 12px;
+        font-size: 12.5px;
         font-weight: 480;
       }
 
@@ -154,7 +154,7 @@
         min-height: 106px;
         padding: 10px;
         resize: none;
-        font-size: 12px;
+        font-size: 12.5px;
         line-height: 1.5;
       }
 
@@ -343,7 +343,7 @@
       .detail-row {
         display: grid;
         grid-template-columns: 96px 1fr;
-        min-height: 38px;
+        min-height: 40px;
         border-bottom: 1px solid var(--line);
       }
 
@@ -439,10 +439,10 @@
         align-items: center;
         justify-content: center;
         min-width: 0;
-        min-height: 38px;
+        min-height: 40px;
         border-right: 1px solid var(--line);
         background: #fff;
-        font-size: 12px;
+        font-size: 12.5px;
         font-weight: 480;
       }
 
@@ -470,7 +470,7 @@
       .debt-row {
         position: relative;
         z-index: 1;
-        min-height: 38px;
+        min-height: 40px;
         border-bottom: 1px solid var(--line);
         background: #fff;
         transition: transform 0.2s ease;
@@ -506,21 +506,93 @@
         text-align: center;
       }
 
+      .select-cell.is-layered {
+        position: relative;
+      }
+
+      .select-cell.is-layered select {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        opacity: 0;
+      }
+
+      .select-display {
+        width: 100%;
+        min-height: 40px;
+        border-radius: 6px;
+        background: var(--teal-soft);
+        color: var(--muted);
+        font-size: 12.5px;
+        font-weight: 480;
+        pointer-events: none;
+        text-align: center;
+      }
+
+      .select-cell select[data-field="status"] {
+        color: var(--ink);
+      }
+
+      .select-cell select[data-field="status"] option {
+        color: var(--ink);
+      }
+
       .select-cell select.is-overdue,
       .select-cell select option.is-overdue,
       .debt-row .is-overdue {
         color: var(--danger);
       }
 
-      .date-cell input {
+      .select-cell select.is-reminder,
+      .select-cell select option.is-reminder,
+      .debt-row .is-reminder {
+        color: #d69500;
+      }
+
+      .select-cell select.is-settled,
+      .select-cell select option.is-settled,
+      .debt-row .is-settled {
+        color: var(--teal);
+      }
+
+      .date-cell {
+        position: relative;
+      }
+
+      .date-display {
+        width: 100%;
+        min-height: 40px;
         border-radius: 6px;
         background: var(--teal-soft);
         color: var(--muted);
+        font-size: 12.5px;
+        font-weight: 480;
+        pointer-events: none;
         text-align: center;
+      }
+
+      .date-cell input {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        opacity: 0;
+      }
+
+      .date-cell input:focus + .date-display {
+        box-shadow: inset 0 0 0 1px rgba(8, 118, 111, 0.35);
       }
 
       .date-cell input::-webkit-calendar-picker-indicator {
         display: none;
+      }
+
+      .date-cell input.fallback-date-input {
+        position: static;
+        opacity: 1;
+        border-radius: 6px;
+        background: var(--teal-soft);
+        color: var(--muted);
+        text-align: center;
       }
 
       .debt-row input {
@@ -804,7 +876,7 @@
       let editingClientId = null;
       let debts = [];
       let lastPlan = "";
-      const debtStatusOptions = ["正常", "逾期", "催收", "协商", "结清"];
+      const debtStatusOptions = ["正常", "提醒", "逾期", "催收", "协商", "结清"];
 
       function uid(prefix) {
         return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -852,14 +924,40 @@
       function normalizeDebtStatus(debt = {}) {
         const value = debt.status || debt.overdue || "";
         if (value === "催收" || value === "协商" || value === "结清") return value;
-        if (value === "逾期" || value === "已逾期") return "逾期";
         const days = daysUntilDue(debt.dueDate);
-        if (days !== null && days <= 0) return "逾期";
+        if (days !== null && days < 0) return "逾期";
+        if (days !== null && days <= 30) return "提醒";
+        if (days === null && value === "提醒") return "提醒";
+        if (days === null && (value === "逾期" || value === "已逾期")) return "逾期";
         return "正常";
       }
 
       function isRiskStatus(status) {
         return status === "逾期" || status === "催收";
+      }
+
+      function isReminderStatus(status) {
+        return status === "提醒";
+      }
+
+      function isSettledStatus(status) {
+        return status === "协商" || status === "结清";
+      }
+
+      function statusClass(status) {
+        if (isRiskStatus(status)) return "is-overdue";
+        if (isReminderStatus(status)) return "is-reminder";
+        if (isSettledStatus(status)) return "is-settled";
+        return "";
+      }
+
+      function dueDateClass(debt) {
+        if (normalizeDebtStatus(debt) === "结清") return "";
+        const days = daysUntilDue(debt?.dueDate);
+        if (days === null) return "";
+        if (days < 0) return "due-alert";
+        if (days <= 30) return "is-reminder";
+        return "";
       }
 
       function displayDueDate(value) {
@@ -880,6 +978,7 @@
       }
 
       function isDueAlert(debt) {
+        if (normalizeDebtStatus(debt) === "结清") return false;
         const days = daysUntilDue(debt?.dueDate);
         return days !== null && days <= 30;
       }
@@ -897,7 +996,9 @@
         const alerts = (client.debts || [])
           .filter(isDueAlert)
           .sort((a, b) => (daysUntilDue(a.dueDate) ?? 9999) - (daysUntilDue(b.dueDate) ?? 9999));
-        return alerts[0] ? dueAlertText(alerts[0]) : "";
+        if (alerts.length === 1) return dueAlertText(alerts[0]);
+        if (alerts.length > 1) return `有${alerts.length}笔债务逾期/到期提醒`;
+        return "";
       }
 
       function formatDebtAmountInput(value) {
@@ -1105,20 +1206,22 @@
             (debt) => `
               <div class="debt-line" data-id="${debt.id}">
                 <div class="debt-row" data-id="${debt.id}">
-                  <span class="select-cell">
+                  <span class="select-cell is-layered">
                     <select data-field="type">
                       ${["网贷", "信用卡", "银行贷款"].map((item) => `<option value="${item}" ${debt.type === item ? "selected" : ""}>${item}</option>`).join("")}
                     </select>
+                    <button class="select-display" type="button">${escapeHtml(debt.type)}</button>
                   </span>
                   <input data-field="creditor" type="text" value="${escapeHtml(debt.creditor)}" />
                   <input data-field="amount" type="text" inputmode="decimal" value="${escapeHtml(formatDebtAmountInput(debt.amount))}" />
                   <span class="select-cell">
-                    <select data-field="status" class="${isRiskStatus(normalizeDebtStatus(debt)) ? "is-overdue" : ""}">
-                      ${debtStatusOptions.map((item) => `<option value="${item}" class="${isRiskStatus(item) ? "is-overdue" : ""}" ${normalizeDebtStatus(debt) === item ? "selected" : ""}>${item}</option>`).join("")}
+                    <select data-field="status" class="${statusClass(normalizeDebtStatus(debt))}">
+                      ${debtStatusOptions.map((item) => `<option value="${item}" class="${statusClass(item)}" ${normalizeDebtStatus(debt) === item ? "selected" : ""}>${item}</option>`).join("")}
                     </select>
                   </span>
                   <span class="date-cell">
                     <input data-field="dueDate" type="date" value="${escapeHtml(debt.dueDate || "")}" />
+                    <button class="date-display" type="button" data-action="pick-date">${escapeHtml(debt.dueDate || "日期")}</button>
                   </span>
                 </div>
                 <button class="debt-delete" type="button" data-action="delete-debt">删除</button>
@@ -1246,8 +1349,8 @@
                   <span>${escapeHtml(debt.type || "")}</span>
                   <span>${escapeHtml(debt.creditor || "")}</span>
                   <span>${escapeHtml(formatDebtAmountInput(debt.amount))}</span>
-                  <span class="${isRiskStatus(normalizeDebtStatus(debt)) ? "is-overdue" : ""}">${escapeHtml(normalizeDebtStatus(debt))}</span>
-                  <span class="${isDueAlert(debt) ? "due-alert" : ""}">${escapeHtml(displayDueDate(debt.dueDate))}</span>
+                  <span class="${statusClass(normalizeDebtStatus(debt))}">${escapeHtml(normalizeDebtStatus(debt))}</span>
+                  <span class="${dueDateClass(debt)}">${escapeHtml(displayDueDate(debt.dueDate))}</span>
                 </div>
               `
             )
@@ -1312,6 +1415,18 @@
         generateBtn.textContent = isOpen ? "收起方案" : "展开方案";
       }
 
+      function fallbackCopyText(text) {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+      }
+
       async function copyPlan() {
         const text = planOutput.innerText.trim();
         if (!text) return;
@@ -1319,27 +1434,11 @@
           if (navigator.clipboard?.writeText) {
             await navigator.clipboard.writeText(text);
           } else {
-            const textarea = document.createElement("textarea");
-            textarea.value = text;
-            textarea.setAttribute("readonly", "");
-            textarea.style.position = "fixed";
-            textarea.style.left = "-9999px";
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand("copy");
-            textarea.remove();
+            fallbackCopyText(text);
           }
           copyPlanBtn.textContent = "已复制";
         } catch {
-          const textarea = document.createElement("textarea");
-          textarea.value = text;
-          textarea.setAttribute("readonly", "");
-          textarea.style.position = "fixed";
-          textarea.style.left = "-9999px";
-          document.body.appendChild(textarea);
-          textarea.select();
-          document.execCommand("copy");
-          textarea.remove();
+          fallbackCopyText(text);
           copyPlanBtn.textContent = "已复制";
         }
         setTimeout(() => {
@@ -1483,7 +1582,11 @@
         const row = event.target.closest(".debt-row");
         const field = event.target.dataset.field;
         if (row && field) updateDebt(row.dataset.id, field, event.target.value);
-        if (field === "status") event.target.classList.toggle("is-overdue", isRiskStatus(event.target.value));
+        if (field === "status") {
+          event.target.classList.remove("is-overdue", "is-reminder", "is-settled");
+          const className = statusClass(event.target.value);
+          if (className) event.target.classList.add(className);
+        }
         if (field === "dueDate") renderDebts();
       });
 
@@ -1496,8 +1599,11 @@
       });
 
       debtRows.addEventListener("click", (event) => {
-        if (event.target.dataset.field === "dueDate" && typeof event.target.showPicker === "function") {
-          event.target.showPicker();
+        const dateCell = event.target.closest(".date-cell");
+        if (dateCell) {
+          const input = dateCell.querySelector("input[data-field='dueDate']");
+          if (input && typeof input.showPicker === "function") input.showPicker();
+          else input?.focus();
         }
         const line = event.target.closest(".debt-line");
         if (line && event.target.closest("[data-action='delete-debt']")) removeDebt(line.dataset.id);
