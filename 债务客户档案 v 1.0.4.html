@@ -262,6 +262,10 @@
         font-weight: 760;
       }
 
+      .client-card .due-alert {
+        margin-top: 4px;
+      }
+
       .empty {
         padding: 14px 10px;
       }
@@ -419,7 +423,7 @@
       .debt-head,
       .debt-row {
         display: grid;
-        grid-template-columns: 0.9fr 1.2fr 0.9fr 0.84fr 1.16fr;
+        grid-template-columns: 0.9fr 1.2fr 0.98fr 0.76fr 1.16fr;
         align-items: center;
       }
 
@@ -623,6 +627,30 @@
         padding-left: 20px;
       }
 
+      .detail-plan {
+        display: none;
+        margin-top: 14px;
+      }
+
+      .detail-plan.active {
+        display: block;
+      }
+
+      .plan-tools {
+        display: flex;
+        justify-content: flex-end;
+        gap: 16px;
+        margin: 0 16px 8px 4px;
+      }
+
+      .plan-tools button {
+        padding: 0;
+        background: transparent;
+        color: var(--teal);
+        font-size: 13px;
+        font-weight: 820;
+      }
+
       @media (max-width: 380px) {
         .app {
           padding-right: 12px;
@@ -648,7 +676,7 @@
 
       <section class="screen active" id="homeScreen">
         <div class="search-box">
-          <input id="clientSearch" type="search" placeholder="输入姓名查询" />
+          <input id="clientSearch" type="search" placeholder="输入姓名或手机号查询" />
         </div>
         <div class="client-list" id="clientList"></div>
         <div class="data-tools">
@@ -725,14 +753,13 @@
           <div class="table-box" id="detailDebtList"></div>
         </section>
         <div class="bottom-action">
-          <button class="primary-btn" id="generateBtn" type="button">生成方案</button>
+          <button class="primary-btn" id="generateBtn" type="button">展开方案</button>
         </div>
-      </section>
-
-      <section class="screen" id="planScreen">
-        <article class="plan-card" id="planOutput"></article>
-        <div class="bottom-action">
-          <button class="primary-btn" id="savePlanBtn" type="button">保存方案</button>
+        <div class="detail-plan" id="detailPlanSection">
+          <div class="plan-tools">
+            <button id="copyPlanBtn" type="button">复制</button>
+          </div>
+          <article id="planOutput"></article>
         </div>
       </section>
     </main>
@@ -749,8 +776,7 @@
       const screens = {
         home: document.querySelector("#homeScreen"),
         form: document.querySelector("#formScreen"),
-        detail: document.querySelector("#detailScreen"),
-        plan: document.querySelector("#planScreen")
+        detail: document.querySelector("#detailScreen")
       };
       const pageTitle = document.querySelector("#pageTitle");
       const leftAction = document.querySelector("#leftAction");
@@ -767,9 +793,10 @@
       const concernCounter = document.querySelector("#concernCounter");
       const saveBtn = document.querySelector("#saveBtn");
       const generateBtn = document.querySelector("#generateBtn");
-      const savePlanBtn = document.querySelector("#savePlanBtn");
+      const copyPlanBtn = document.querySelector("#copyPlanBtn");
       const detailSummary = document.querySelector("#detailSummary");
       const detailDebtList = document.querySelector("#detailDebtList");
+      const detailPlanSection = document.querySelector("#detailPlanSection");
       const planOutput = document.querySelector("#planOutput");
 
       let currentScreen = "home";
@@ -1001,13 +1028,6 @@
           renderDetail();
         }
 
-        if (name === "plan") {
-          pageTitle.textContent = "方案";
-          leftAction.textContent = "‹ 返回";
-          rightAction.textContent = "复制";
-          leftAction.disabled = false;
-          rightAction.disabled = false;
-        }
       }
 
       function getClient(clientId) {
@@ -1162,7 +1182,14 @@
       function renderClientList() {
         const query = clientSearch.value.trim().toLowerCase();
         const clients = loadClients().sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
-        const filtered = query ? clients.filter((client) => (client.name || "").toLowerCase().includes(query)) : clients;
+        const filtered = query
+          ? clients.filter((client) => {
+              const name = (client.name || "").toLowerCase();
+              const phone = String(client.phone || "").replace(/\D/g, "");
+              const normalizedQuery = query.replace(/\D/g, "");
+              return name.includes(query) || (normalizedQuery && phone.includes(normalizedQuery));
+            })
+          : clients;
         if (!filtered.length) {
           clientList.innerHTML = `<div class="empty">${query ? "没有找到这个客户。" : "还没有保存客户档案。"}</div>`;
           return;
@@ -1226,6 +1253,10 @@
             )
             .join("")}
         `;
+        lastPlan = "";
+        planOutput.innerHTML = "";
+        detailPlanSection.classList.remove("active");
+        generateBtn.textContent = "展开方案";
       }
 
       function createPlan(client) {
@@ -1268,25 +1299,52 @@
         if (!client) return;
         lastPlan = createPlan(client);
         planOutput.innerHTML = lastPlan;
-        showScreen("plan");
+        detailPlanSection.classList.add("active");
+        generateBtn.textContent = "收起方案";
       }
 
-      function copyPlan() {
-        const text = planOutput.innerText.trim();
-        if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text);
-      }
-
-      function savePlan() {
-        const client = getClient(selectedClientId);
-        if (!client) return;
-        const clients = loadClients();
-        const index = clients.findIndex((item) => item.id === client.id);
-        if (index >= 0) {
-          clients[index].plan = lastPlan;
-          clients[index].updatedAt = new Date().toISOString();
-          saveClients(clients);
+      function togglePlan() {
+        if (!lastPlan) {
+          generatePlan();
+          return;
         }
-        showScreen("detail");
+        const isOpen = detailPlanSection.classList.toggle("active");
+        generateBtn.textContent = isOpen ? "收起方案" : "展开方案";
+      }
+
+      async function copyPlan() {
+        const text = planOutput.innerText.trim();
+        if (!text) return;
+        try {
+          if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.setAttribute("readonly", "");
+            textarea.style.position = "fixed";
+            textarea.style.left = "-9999px";
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand("copy");
+            textarea.remove();
+          }
+          copyPlanBtn.textContent = "已复制";
+        } catch {
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.setAttribute("readonly", "");
+          textarea.style.position = "fixed";
+          textarea.style.left = "-9999px";
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          textarea.remove();
+          copyPlanBtn.textContent = "已复制";
+        }
+        setTimeout(() => {
+          copyPlanBtn.textContent = "复制";
+        }, 1200);
       }
 
       function exportBackup() {
@@ -1346,8 +1404,6 @@
           else showScreen("home");
         } else if (currentScreen === "detail") {
           showScreen("home");
-        } else if (currentScreen === "plan") {
-          showScreen("detail");
         }
       });
 
@@ -1357,7 +1413,6 @@
           if (editingClientId && selectedClientId) showScreen("detail");
           else showScreen("home");
         } else if (currentScreen === "detail") editClient(selectedClientId);
-        else if (currentScreen === "plan") copyPlan();
       });
 
       clientSearch.addEventListener("input", renderClientList);
@@ -1402,12 +1457,9 @@
       });
       generateBtn.addEventListener("click", () => {
         tapButton(generateBtn);
-        generatePlan();
+        togglePlan();
       });
-      savePlanBtn.addEventListener("click", () => {
-        tapButton(savePlanBtn);
-        savePlan();
-      });
+      copyPlanBtn.addEventListener("click", copyPlan);
       concernField.addEventListener("input", updateConcernCount);
 
       archiveForm.addEventListener("input", (event) => {
