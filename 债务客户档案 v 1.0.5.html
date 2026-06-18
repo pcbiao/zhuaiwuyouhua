@@ -78,20 +78,6 @@
         font-weight: 900;
       }
 
-      .top-title::after {
-        content: "1.0.5";
-        display: inline-flex;
-        align-items: center;
-        margin-left: 6px;
-        padding: 1px 5px;
-        border-radius: 999px;
-        background: var(--teal-soft);
-        color: var(--teal);
-        font-size: 10px;
-        font-weight: 700;
-        vertical-align: middle;
-      }
-
       .top-action {
         min-height: 32px;
         border-radius: 8px;
@@ -292,6 +278,14 @@
         width: 1px;
         height: 12px;
         background: var(--line);
+      }
+
+      .app-signature {
+        margin-top: 18px;
+        color: #a8b0ad;
+        font-size: 11px;
+        font-weight: 520;
+        text-align: center;
       }
 
       .backup-input {
@@ -834,6 +828,8 @@
           <article id="planOutput"></article>
         </div>
       </section>
+
+      <p class="app-signature">轻债助手 · v 1.0.5</p>
     </main>
 
     <script>
@@ -901,7 +897,7 @@
 
       function formatMoney(value) {
         if (!Number.isFinite(value)) return "0";
-        if (Math.abs(value) >= 10000) return `${(value / 10000).toFixed(1)}万`;
+        if (Math.abs(value) >= 10000) return `${formatWanAmount(value / 10000)}万`;
         return Math.round(value).toLocaleString("zh-CN");
       }
 
@@ -1005,8 +1001,19 @@
       }
 
       function formatDebtAmountInput(value) {
-        const amount = parseDebtAmount(value);
-        return amount > 0 ? (amount / 10000).toFixed(1) : String(value || "").trim();
+        const raw = String(value || "").trim().replace(/,/g, "");
+        if (!raw) return "";
+        const normalized = raw.includes("万") ? raw.replace("万", "") : raw;
+        const numberText = normalized.replace(/[^\d.]/g, "");
+        const match = numberText.match(/^(\d+)(?:\.(\d*))?/);
+        if (!match) return "";
+        const integerPart = String(Number(match[1]));
+        const decimalPart = match[2] === undefined ? "" : match[2].slice(0, 2);
+        return decimalPart ? `${integerPart}.${decimalPart}` : integerPart;
+      }
+
+      function formatWanAmount(value) {
+        return Number(value.toFixed(2)).toString();
       }
 
       function loadClients() {
@@ -1123,8 +1130,7 @@
         }
 
         if (name === "detail") {
-          const client = getClient(selectedClientId);
-          pageTitle.textContent = client?.name || "客户详情";
+          pageTitle.textContent = "客户详情";
           leftAction.textContent = "‹ 返回";
           rightAction.textContent = "编辑";
           leftAction.disabled = false;
