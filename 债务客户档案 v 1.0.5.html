@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>债务客户档案 v 1.0.4</title>
+    <title>债务客户档案 v 1.0.5</title>
     <style>
       :root {
         color-scheme: light;
@@ -79,7 +79,7 @@
       }
 
       .top-title::after {
-        content: "1.0.4";
+        content: "1.0.5";
         display: inline-flex;
         align-items: center;
         margin-left: 6px;
@@ -923,12 +923,15 @@
 
       function normalizeDebtStatus(debt = {}) {
         const value = debt.status || debt.overdue || "";
-        if (value === "催收" || value === "协商" || value === "结清") return value;
-        const days = daysUntilDue(debt.dueDate);
+        if (debtStatusOptions.includes(value)) return value;
+        if (value === "已逾期") return "逾期";
+        return statusFromDueDate(debt.dueDate);
+      }
+
+      function statusFromDueDate(dueDate) {
+        const days = daysUntilDue(dueDate);
         if (days !== null && days < 0) return "逾期";
         if (days !== null && days <= 30) return "提醒";
-        if (days === null && value === "提醒") return "提醒";
-        if (days === null && (value === "逾期" || value === "已逾期")) return "逾期";
         return "正常";
       }
 
@@ -1231,7 +1234,16 @@
           .join("");
       }
 
+      function syncDebtsFromRows() {
+        debtRows.querySelectorAll(".debt-row").forEach((row) => {
+          row.querySelectorAll("[data-field]").forEach((field) => {
+            updateDebt(row.dataset.id, field.dataset.field, field.value);
+          });
+        });
+      }
+
       function buildArchive() {
+        syncDebtsFromRows();
         const data = Object.fromEntries(new FormData(archiveForm).entries());
         return {
           id: editingClientId || uid("client"),
@@ -1242,7 +1254,7 @@
           biggestConcern: data.biggestConcern.trim(),
           debts: debts
             .filter((debt) => debt.creditor.trim() || debt.amount.trim())
-            .map((debt) => ({ ...debt, status: normalizeDebtStatus(debt) })),
+            .map((debt) => ({ ...debt, status: debt.status || statusFromDueDate(debt.dueDate) })),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
@@ -1452,7 +1464,7 @@
         const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
         const backup = {
           app: "debt-customer-archive",
-          version: "1.0.4",
+          version: "1.0.5",
           storageKey,
           exportedAt: now.toISOString(),
           clients: loadClients()
@@ -1586,6 +1598,9 @@
           event.target.classList.remove("is-overdue", "is-reminder", "is-settled");
           const className = statusClass(event.target.value);
           if (className) event.target.classList.add(className);
+        }
+        if (field === "dueDate") {
+          updateDebt(row.dataset.id, "status", statusFromDueDate(event.target.value));
         }
         if (field === "type" || field === "dueDate") renderDebts();
       });
