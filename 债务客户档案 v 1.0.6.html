@@ -502,6 +502,13 @@
         gap: 10px;
       }
 
+      #followMethodGroup {
+        display: grid;
+        width: 100%;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+      }
+
       .segmented button {
         min-width: 60px;
         min-height: 25px;
@@ -511,6 +518,11 @@
         color: var(--ink);
         font-size: 12px;
         font-weight: 480;
+      }
+
+      #followMethodGroup button {
+        min-width: 0;
+        padding: 0 4px;
       }
 
       .segmented button.active {
