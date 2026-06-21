@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>债务客户档案 v 1.0.5</title>
+    <title>债务客户档案 v 1.0.6</title>
     <style>
       :root {
         color-scheme: light;
@@ -183,7 +183,7 @@
         transform: translateX(-144px);
       }
 
-      .client-edit,
+      .client-follow,
       .client-delete {
         position: absolute;
         top: 0;
@@ -196,9 +196,9 @@
         transition: opacity 0.12s ease;
       }
 
-      .client-edit {
+      .client-follow {
         right: 72px;
-        background: #1677ff;
+        background: var(--teal);
       }
 
       .client-delete {
@@ -206,7 +206,7 @@
         background: var(--danger);
       }
 
-      .client-line.open .client-edit,
+      .client-line.open .client-follow,
       .client-line.open .client-delete {
         opacity: 1;
       }
@@ -232,8 +232,6 @@
         font-weight: 520;
         white-space: nowrap;
       }
-
-
       .client-card span,
       .empty {
         display: block;
@@ -250,6 +248,48 @@
 
       .client-card .due-alert {
         margin-top: 4px;
+      }
+
+      .client-filter {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 2px 10px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 720;
+      }
+
+      .client-filter button {
+        position: relative;
+        padding: 0 0 5px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 720;
+      }
+
+      .client-filter button.active {
+        color: var(--teal);
+      }
+
+      .client-filter button.active::after {
+        content: "";
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        height: 2px;
+        border-radius: 999px;
+        background: var(--teal);
+      }
+
+      .client-filter .filter-separator {
+        color: #b8bfbc;
+      }
+
+      .client-filter .filter-alert {
+        color: var(--danger);
       }
 
       .empty {
@@ -307,6 +347,72 @@
         margin-bottom: 9px;
         font-size: 18px;
         font-weight: 900;
+      }
+
+      .follow-list {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .follow-line {
+        position: relative;
+        overflow: hidden;
+        background: #fff;
+        touch-action: pan-y;
+      }
+
+      .follow-item {
+        position: relative;
+        z-index: 1;
+        padding: 10px;
+        border-bottom: 1px solid var(--line);
+        background: #fff;
+        transition: transform 0.2s ease;
+      }
+
+      .follow-line:last-child .follow-item {
+        border-bottom: 0;
+      }
+
+      .follow-line.open .follow-item {
+        transform: translateX(-72px);
+      }
+
+      .follow-delete {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 72px;
+        background: var(--danger);
+        color: #fff;
+        font-size: 14px;
+        font-weight: 820;
+        opacity: 0;
+        transition: opacity 0.12s ease;
+      }
+
+      .follow-line.open .follow-delete {
+        opacity: 1;
+      }
+
+      .follow-meta {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 620;
+        line-height: 1.4;
+      }
+
+      .follow-content {
+        color: var(--ink);
+        font-size: 12.5px;
+        font-weight: 520;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
       }
 
       .step-add {
@@ -744,6 +850,11 @@
         <div class="search-box">
           <input id="clientSearch" type="search" placeholder="输入姓名或手机号查询" />
         </div>
+        <div class="client-filter" id="clientFilter">
+          <button class="active" type="button" data-filter="all">全部客户</button>
+          <span class="filter-separator">·</span>
+          <button type="button" data-filter="alert">有提醒 <span class="filter-alert" id="alertClientCount">0</span></button>
+        </div>
         <div class="client-list" id="clientList"></div>
         <div class="data-tools">
           <button id="importBtn" type="button">导入</button>
@@ -815,8 +926,12 @@
       <section class="screen" id="detailScreen">
         <div class="detail-block" id="detailSummary"></div>
         <section class="step">
-          <h2 class="step-title"><span class="num">2</span><span>债务清单</span></h2>
+          <h2 class="step-title"><span>债务清单</span></h2>
           <div class="table-box" id="detailDebtList"></div>
+        </section>
+        <section class="step">
+          <h2 class="step-title"><span>跟进记录</span><button class="step-add" id="addFollowBtn" type="button">+ 添加</button></h2>
+          <div class="follow-list" id="detailFollowList"></div>
         </section>
         <div class="bottom-action">
           <button class="primary-btn" id="generateBtn" type="button">展开方案</button>
@@ -829,7 +944,46 @@
         </div>
       </section>
 
-      <p class="app-signature">轻债助手 · v 1.0.5</p>
+      <section class="screen" id="followScreen">
+        <form id="followForm">
+          <section class="step">
+            <h2 class="step-title"><span>跟进信息</span></h2>
+            <div class="box">
+              <label class="info-row">
+                <span class="label-cell">跟进时间：</span>
+                <span class="value-cell"><input name="followTime" type="datetime-local" /></span>
+              </label>
+              <div class="info-row">
+                <span class="label-cell">跟进方式：</span>
+                <span class="value-cell">
+                  <span class="segmented" id="followMethodGroup">
+                    <button class="active" type="button" data-value="电话">电话</button>
+                    <button type="button" data-value="微信">微信</button>
+                    <button type="button" data-value="面谈">面谈</button>
+                    <button type="button" data-value="其他">其他</button>
+                  </span>
+                  <input name="followMethod" type="hidden" value="电话" />
+                </span>
+              </div>
+              <label class="info-row">
+                <span class="label-cell">下次跟进：</span>
+                <span class="value-cell"><input name="nextFollowDate" type="date" /></span>
+              </label>
+            </div>
+          </section>
+          <section class="step">
+            <h2 class="step-title"><span>跟进内容</span></h2>
+            <div class="box concern-box">
+              <div class="textarea-wrap">
+                <textarea name="followContent" maxlength="200" placeholder="记录沟通结果、客户反馈或下一步安排"></textarea>
+                <span class="counter" id="followCounter">0/200</span>
+              </div>
+            </div>
+          </section>
+        </form>
+      </section>
+
+      <p class="app-signature">轻债助手 · v 1.0.6</p>
     </main>
 
     <script>
@@ -844,12 +998,15 @@
       const screens = {
         home: document.querySelector("#homeScreen"),
         form: document.querySelector("#formScreen"),
-        detail: document.querySelector("#detailScreen")
+        detail: document.querySelector("#detailScreen"),
+        follow: document.querySelector("#followScreen")
       };
       const pageTitle = document.querySelector("#pageTitle");
       const leftAction = document.querySelector("#leftAction");
       const rightAction = document.querySelector("#rightAction");
       const clientSearch = document.querySelector("#clientSearch");
+      const clientFilter = document.querySelector("#clientFilter");
+      const alertClientCount = document.querySelector("#alertClientCount");
       const clientList = document.querySelector("#clientList");
       const importBtn = document.querySelector("#importBtn");
       const exportBtn = document.querySelector("#exportBtn");
@@ -864,12 +1021,19 @@
       const copyPlanBtn = document.querySelector("#copyPlanBtn");
       const detailSummary = document.querySelector("#detailSummary");
       const detailDebtList = document.querySelector("#detailDebtList");
+      const detailFollowList = document.querySelector("#detailFollowList");
+      const addFollowBtn = document.querySelector("#addFollowBtn");
       const detailPlanSection = document.querySelector("#detailPlanSection");
       const planOutput = document.querySelector("#planOutput");
+      const followForm = document.querySelector("#followForm");
+      const followMethodGroup = document.querySelector("#followMethodGroup");
+      const followContentField = followForm.elements.followContent;
+      const followCounter = document.querySelector("#followCounter");
 
       let currentScreen = "home";
       let selectedClientId = null;
       let editingClientId = null;
+      let clientFilterMode = "all";
       let debts = [];
       let lastPlan = "";
       const debtStatusOptions = ["正常", "提醒", "逾期", "催收", "协商", "结清"];
@@ -915,6 +1079,19 @@
         if (!Number.isFinite(date.getTime())) return "未记录";
         const pad = (number) => String(number).padStart(2, "0");
         return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      }
+
+      function formatFollowTime(value) {
+        const date = new Date(value);
+        if (!Number.isFinite(date.getTime())) return "未记录";
+        const pad = (number) => String(number).padStart(2, "0");
+        return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      }
+
+      function currentDateTimeInputValue() {
+        const date = new Date();
+        const pad = (number) => String(number).padStart(2, "0");
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
       }
 
       function normalizeDebtStatus(debt = {}) {
@@ -1000,6 +1177,10 @@
         return "";
       }
 
+      function hasDueAlert(client) {
+        return (client.debts || []).some(isDueAlert);
+      }
+
       function formatDebtAmountInput(value) {
         const raw = String(value || "").trim().replace(/,/g, "");
         if (!raw) return "";
@@ -1044,6 +1225,14 @@
             amount: String(debt.amount || "").trim(),
             status: normalizeDebtStatus(debt),
             dueDate: String(debt.dueDate || "").trim()
+          })),
+          followUps: (Array.isArray(client.followUps) ? client.followUps : []).map((item) => ({
+            id: item.id || uid("follow"),
+            time: item.time || item.createdAt || now,
+            method: item.method || "电话",
+            nextDate: String(item.nextDate || "").trim(),
+            content: String(item.content || "").trim(),
+            createdAt: item.createdAt || now
           })),
           createdAt: client.createdAt || now,
           updatedAt: client.updatedAt || now,
@@ -1136,6 +1325,14 @@
           leftAction.disabled = false;
           rightAction.disabled = false;
           renderDetail();
+        }
+
+        if (name === "follow") {
+          pageTitle.textContent = "添加跟进";
+          leftAction.textContent = "‹ 返回";
+          rightAction.textContent = "保存";
+          leftAction.disabled = false;
+          rightAction.disabled = false;
         }
 
       }
@@ -1290,6 +1487,8 @@
         if (index >= 0) {
           archive.id = clients[index].id;
           archive.createdAt = clients[index].createdAt || archive.createdAt;
+          archive.followUps = clients[index].followUps || [];
+          archive.plan = clients[index].plan || "";
           clients[index] = archive;
         } else {
           clients.push(archive);
@@ -1303,6 +1502,11 @@
       function renderClientList() {
         const query = clientSearch.value.trim().toLowerCase();
         const clients = loadClients().sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+        const alertCount = clients.filter(hasDueAlert).length;
+        alertClientCount.textContent = alertCount;
+        clientFilter.querySelectorAll("button").forEach((button) => {
+          button.classList.toggle("active", button.dataset.filter === clientFilterMode);
+        });
         const filtered = query
           ? clients.filter((client) => {
               const name = (client.name || "").toLowerCase();
@@ -1310,7 +1514,7 @@
               const normalizedQuery = query.replace(/\D/g, "");
               return name.includes(query) || (normalizedQuery && phone.includes(normalizedQuery));
             })
-          : clients;
+          : clients.filter((client) => clientFilterMode === "all" || hasDueAlert(client));
         if (!filtered.length) {
           clientList.innerHTML = `<div class="empty">${query ? "没有找到这个客户。" : "还没有保存客户档案。"}</div>`;
           return;
@@ -1329,7 +1533,7 @@
                     <span>电话：${escapeHtml(client.phone || "未填写")} · 总负债：${formatMoney(totalDebt(client))} · ${(client.debts || []).length} 笔债务</span>
                     ${alert ? `<span class="due-alert">${escapeHtml(alert)}</span>` : ""}
                   </button>
-                  <button class="client-edit" type="button" data-action="edit-client">编辑</button>
+                  <button class="client-follow" type="button" data-action="follow-client">跟进</button>
                   <button class="client-delete" type="button" data-action="delete-client">删除</button>
                 </div>
               `;
@@ -1374,10 +1578,80 @@
             )
             .join("")}
         `;
+        const followUps = [...(client.followUps || [])].sort((a, b) => (b.time || "").localeCompare(a.time || ""));
+        detailFollowList.innerHTML = followUps.length
+          ? followUps
+              .map(
+                (item) => `
+                  <div class="follow-line" data-follow-id="${item.id}">
+                    <div class="follow-item">
+                      <span class="follow-meta">${escapeHtml(formatFollowTime(item.time))} · ${escapeHtml(item.method || "电话")}${item.nextDate ? ` · 下次 ${escapeHtml(item.nextDate)}` : ""}</span>
+                      <div class="follow-content">${escapeHtml(item.content || "")}</div>
+                    </div>
+                    <button class="follow-delete" type="button" data-action="delete-follow">删除</button>
+                  </div>
+                `
+              )
+              .join("")
+          : `<div class="empty">还没有跟进记录。</div>`;
         lastPlan = "";
         planOutput.innerHTML = "";
         detailPlanSection.classList.remove("active");
         generateBtn.textContent = "展开方案";
+      }
+
+      function startAddFollow() {
+        if (!selectedClientId) return;
+        followForm.reset();
+        followForm.elements.followTime.value = currentDateTimeInputValue();
+        followForm.elements.followMethod.value = "电话";
+        followMethodGroup.querySelectorAll("button").forEach((button) => {
+          button.classList.toggle("active", button.dataset.value === "电话");
+        });
+        updateFollowCount();
+        showScreen("follow");
+      }
+
+      function saveFollowUp() {
+        const client = getClient(selectedClientId);
+        if (!client) return;
+        const content = followForm.elements.followContent.value.trim();
+        if (!content) {
+          followForm.elements.followContent.focus();
+          return;
+        }
+        const clients = loadClients();
+        const index = clients.findIndex((item) => item.id === selectedClientId);
+        if (index < 0) return;
+        const now = new Date().toISOString();
+        const followUp = {
+          id: uid("follow"),
+          time: followForm.elements.followTime.value ? new Date(followForm.elements.followTime.value).toISOString() : now,
+          method: followForm.elements.followMethod.value || "电话",
+          nextDate: followForm.elements.nextFollowDate.value || "",
+          content,
+          createdAt: now
+        };
+        clients[index] = {
+          ...clients[index],
+          followUps: [followUp, ...(clients[index].followUps || [])],
+          updatedAt: now
+        };
+        saveClients(clients);
+        showScreen("detail");
+      }
+
+      function removeFollowUp(followId) {
+        const clients = loadClients();
+        const index = clients.findIndex((item) => item.id === selectedClientId);
+        if (index < 0) return;
+        clients[index] = {
+          ...clients[index],
+          followUps: (clients[index].followUps || []).filter((item) => item.id !== followId),
+          updatedAt: new Date().toISOString()
+        };
+        saveClients(clients);
+        renderDetail();
       }
 
       function createPlan(client) {
@@ -1470,7 +1744,7 @@
         const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
         const backup = {
           app: "debt-customer-archive",
-          version: "1.0.5",
+          version: "1.0.6",
           storageKey,
           exportedAt: now.toISOString(),
           clients: loadClients()
@@ -1521,6 +1795,8 @@
           else showScreen("home");
         } else if (currentScreen === "detail") {
           showScreen("home");
+        } else if (currentScreen === "follow") {
+          showScreen("detail");
         }
       });
 
@@ -1530,6 +1806,7 @@
           if (editingClientId && selectedClientId) showScreen("detail");
           else showScreen("home");
         } else if (currentScreen === "detail") editClient(selectedClientId);
+        else if (currentScreen === "follow") saveFollowUp();
       });
 
       clientSearch.addEventListener("input", renderClientList);
@@ -1537,13 +1814,20 @@
       importBtn.addEventListener("click", () => backupFileInput.click());
       backupFileInput.addEventListener("change", () => importBackup(backupFileInput.files[0]));
 
+      clientFilter.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-filter]");
+        if (!button) return;
+        clientFilterMode = button.dataset.filter;
+        renderClientList();
+      });
+
       clientList.addEventListener("click", (event) => {
         const line = event.target.closest(".client-line");
         if (!line) return;
         const action = event.target.closest("[data-action]");
-        if (action?.dataset.action === "edit-client") {
+        if (action?.dataset.action === "follow-client") {
           selectedClientId = line.dataset.clientId;
-          editClient(selectedClientId);
+          startAddFollow();
           clientDidSwipe = false;
           return;
         }
@@ -1572,12 +1856,14 @@
         tapButton(saveBtn);
         saveArchive();
       });
+      addFollowBtn.addEventListener("click", startAddFollow);
       generateBtn.addEventListener("click", () => {
         tapButton(generateBtn);
         togglePlan();
       });
       copyPlanBtn.addEventListener("click", copyPlan);
       concernField.addEventListener("input", updateConcernCount);
+      followContentField.addEventListener("input", updateFollowCount);
 
       archiveForm.addEventListener("input", (event) => {
         event.target.classList.remove("is-error");
@@ -1588,6 +1874,13 @@
         if (!button) return;
         mortgageGroup.querySelectorAll("button").forEach((item) => item.classList.toggle("active", item === button));
         archiveForm.elements.hasMortgage.value = button.dataset.value;
+      });
+
+      followMethodGroup.addEventListener("click", (event) => {
+        const button = event.target.closest("button");
+        if (!button) return;
+        followMethodGroup.querySelectorAll("button").forEach((item) => item.classList.toggle("active", item === button));
+        followForm.elements.followMethod.value = button.dataset.value;
       });
 
       debtRows.addEventListener("input", (event) => {
@@ -1630,8 +1923,15 @@
         if (line && event.target.closest("[data-action='delete-debt']")) removeDebt(line.dataset.id);
       });
 
+      detailFollowList.addEventListener("click", (event) => {
+        const line = event.target.closest(".follow-line");
+        if (line && event.target.closest("[data-action='delete-follow']")) removeFollowUp(line.dataset.followId);
+      });
+
       let swipeStartX = 0;
       let swipeTarget = null;
+      let followSwipeStartX = 0;
+      let followSwipeTarget = null;
       let clientSwipeStartX = 0;
       let clientSwipeTarget = null;
       let clientDidSwipe = false;
@@ -1710,8 +2010,45 @@
         handleDebtSwipe(event.changedTouches[0].clientX);
       });
 
+      function openFollowActions(target) {
+        document.querySelectorAll(".follow-line.open").forEach((row) => {
+          if (row !== target) row.classList.remove("open");
+        });
+        target.classList.add("open");
+      }
+
+      function handleFollowSwipe(endX) {
+        if (!followSwipeTarget) return;
+        const distance = endX - followSwipeStartX;
+        if (distance < -28) openFollowActions(followSwipeTarget);
+        if (distance > 28) followSwipeTarget.classList.remove("open");
+        followSwipeTarget = null;
+      }
+
+      detailFollowList.addEventListener("pointerdown", (event) => {
+        followSwipeTarget = event.target.closest(".follow-line");
+        followSwipeStartX = event.clientX;
+      });
+
+      detailFollowList.addEventListener("pointerup", (event) => {
+        handleFollowSwipe(event.clientX);
+      });
+
+      detailFollowList.addEventListener("touchstart", (event) => {
+        followSwipeTarget = event.target.closest(".follow-line");
+        followSwipeStartX = event.changedTouches[0].clientX;
+      }, { passive: true });
+
+      detailFollowList.addEventListener("touchend", (event) => {
+        handleFollowSwipe(event.changedTouches[0].clientX);
+      });
+
       function updateConcernCount() {
         concernCounter.textContent = `${concernField.value.length}/200`;
+      }
+
+      function updateFollowCount() {
+        followCounter.textContent = `${followContentField.value.length}/200`;
       }
 
       migrateClients();
