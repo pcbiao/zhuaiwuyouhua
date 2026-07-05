@@ -1,0 +1,25 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.pcbiao.debtarchive"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.pcbiao.debtarchive"
+        minSdk 23
+        targetSdk 35
+        versionCode 120
+        versionName "1.2.0"
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file("debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
+}

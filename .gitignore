@@ -7,6 +7,8 @@ dist/
 build/
 out/
 coverage/
+**/.gradle/
+**/local.properties
 
 # Local environment
 .env
