@@ -72,6 +72,7 @@ public class MainActivity extends Activity {
     private static final float FILTER_SP = 14f;
     private static final int INFO_LABEL_DP = 132;
     private static final int DEBT_DELETE_DP = 56;
+    private static final int DEBT_DELETE_OVERLAP_DP = 12;
     private static final int REQ_IMPORT = 701;
     private static final int REQ_EXPORT = 702;
 
@@ -382,7 +383,7 @@ public class MainActivity extends Activity {
             SwipeFrameLayout swipeWrap = new SwipeFrameLayout(this);
             Button deleteAction = debtDeleteButton();
             deleteAction.setVisibility(View.INVISIBLE);
-            FrameLayout.LayoutParams deleteLp = new FrameLayout.LayoutParams(dp(DEBT_DELETE_DP), -1, Gravity.RIGHT);
+            FrameLayout.LayoutParams deleteLp = new FrameLayout.LayoutParams(dp(DEBT_DELETE_DP + DEBT_DELETE_OVERLAP_DP), -1, Gravity.RIGHT);
             swipeWrap.addView(deleteAction, deleteLp);
             LinearLayout card = debtCard();
             card.setTag(d);

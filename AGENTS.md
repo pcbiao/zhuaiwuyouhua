@@ -33,7 +33,7 @@
 - App 页脚显示的版本号
 - JSON 导出里的版本号
 - `安卓原生/README.md`
-- APK 文件名，例如 `轻债助手-1.2.2.apk`
+- APK 文件名，格式为 `App名称 vX.Y.Z.apk`，例如 `轻债助手 v1.2.2.apk`
 
 ## 打包和模拟器
 
@@ -57,13 +57,14 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradle
 安装并启动命令：
 
 ```bash
-"$HOME/Library/Android/sdk/platform-tools/adb" install -r "安卓原生/app/build/outputs/apk/debug/轻债助手-1.2.3.apk"
+"$HOME/Library/Android/sdk/platform-tools/adb" install -r "安卓原生/app/build/outputs/apk/debug/轻债助手 v1.2.3.apk"
 "$HOME/Library/Android/sdk/platform-tools/adb" shell am start -S -n com.pcbiao.debtarchive/.MainActivity
 ```
 
 ## 安装包规则
 
-- 标准安装包只保留一个：`安卓原生/app/build/outputs/apk/debug/轻债助手-X.Y.Z.apk`
+- 标准安装包只保留一个，文件名格式固定为：`App名称 vX.Y.Z.apk`
+- 当前 App 标准安装包路径示例：`安卓原生/app/build/outputs/apk/debug/轻债助手 v1.2.3.apk`
 - Gradle 默认生成的 `app-debug.apk` 需要改名为标准安装包。
 - 不要保留多个重复 APK。
 - `app/build/` 是构建输出，不提交到 GitHub。
