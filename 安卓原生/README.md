@@ -20,5 +20,5 @@
 
 ## 版本
 
-- Android `versionName`: `1.2.0`
-- Android `versionCode`: `120`
+- Android `versionName`: `1.2.3`
+- Android `versionCode`: `123`

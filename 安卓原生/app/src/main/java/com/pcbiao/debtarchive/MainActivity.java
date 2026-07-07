@@ -1,5 +1,7 @@
 package com.pcbiao.debtarchive;
 
+import android.animation.LayoutTransition;
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
@@ -20,18 +22,17 @@ import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.style.ForegroundColorSpan;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -56,8 +57,8 @@ public class MainActivity extends Activity {
     private static final int TEAL_SOFT = Color.rgb(237, 248, 246);
     private static final int INK = Color.rgb(21, 31, 29);
     private static final int MUTED = Color.rgb(109, 119, 116);
-    private static final int LINE = Color.rgb(224, 229, 226);
-    private static final int DEBT_LINE = Color.rgb(196, 204, 201);
+    private static final int LINE = Color.rgb(158, 170, 166);
+    private static final int DEBT_LINE = LINE;
     private static final int PAPER = Color.WHITE;
     private static final int BG = Color.rgb(247, 248, 247);
     private static final int DANGER = Color.rgb(230, 0, 18);
@@ -69,7 +70,8 @@ public class MainActivity extends Activity {
     private static final float SMALL_SP = 13f;
     private static final float ACTION_SP = 15f;
     private static final float FILTER_SP = 14f;
-    private static final int INFO_LABEL_DP = 116;
+    private static final int INFO_LABEL_DP = 132;
+    private static final int DEBT_DELETE_DP = 56;
     private static final int REQ_IMPORT = 701;
     private static final int REQ_EXPORT = 702;
 
@@ -93,6 +95,8 @@ public class MainActivity extends Activity {
     private EditText concernField;
     private LinearLayout debtRows;
     private int expandedDebtIndex = 0;
+    private View openDebtSwipeCard;
+    private View openDebtDeleteAction;
     private final List<DebtDraft> drafts = new ArrayList<>();
     private final String[] debtTypes = {"网贷", "信用卡", "银行贷款"};
     private final String[] statuses = {"正常", "提醒", "逾期", "催收", "协商", "结清"};
@@ -241,11 +245,8 @@ public class MainActivity extends Activity {
             } else {
                 String fullText = baseText + "\n" + alertText;
                 SpannableString span = new SpannableString(fullText);
-                int lineStart = fullText.indexOf(alertText);
-                if (lineStart >= 0) {
-                    colorAlertPart(span, fullText, "提醒", Color.rgb(214, 149, 0));
-                    colorAlertPart(span, fullText, "逾期", DANGER);
-                }
+                colorAlertPart(span, fullText, "提醒", Color.rgb(214, 149, 0));
+                colorAlertPart(span, fullText, "逾期", DANGER);
                 card.setText(span);
             }
             String id = opt(c, "id");
@@ -275,8 +276,8 @@ public class MainActivity extends Activity {
         incomeField = rowInput(info, "月收入：", "请输入金额", dp(INFO_LABEL_DP));
         LinearLayout mortgageRow = row(info, "是否有房贷：", dp(INFO_LABEL_DP));
         LinearLayout mortgageGroup = new LinearLayout(this);
-        mortgageGroup.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
-        mortgageGroup.setPadding(0, 0, dp(18), 0);
+        mortgageGroup.setGravity(Gravity.CENTER_VERTICAL);
+        mortgageGroup.setPadding(dp(10), 0, 0, 0);
         TextView mortgageYes = mortgageOption("有", false);
         TextView mortgageSep = label("|", BODY_SP, MUTED, Typeface.NORMAL);
         mortgageSep.setGravity(Gravity.CENTER);
@@ -284,10 +285,11 @@ public class MainActivity extends Activity {
         TextView mortgageSepUnknown = label("|", BODY_SP, MUTED, Typeface.NORMAL);
         mortgageSepUnknown.setGravity(Gravity.CENTER);
         TextView mortgageUnknown = mortgageOption("不确定", false);
-        mortgageGroup.addView(mortgageYes, new LinearLayout.LayoutParams(dp(44), dp(40)));
-        mortgageGroup.addView(mortgageSep, new LinearLayout.LayoutParams(dp(18), dp(40)));
-        mortgageGroup.addView(mortgageNo, new LinearLayout.LayoutParams(dp(44), dp(40)));
-        mortgageGroup.addView(mortgageSepUnknown, new LinearLayout.LayoutParams(dp(18), dp(40)));
+        mortgageYes.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        mortgageGroup.addView(mortgageYes, new LinearLayout.LayoutParams(dp(28), dp(40)));
+        mortgageGroup.addView(mortgageSep, new LinearLayout.LayoutParams(dp(32), dp(40)));
+        mortgageGroup.addView(mortgageNo, new LinearLayout.LayoutParams(dp(32), dp(40)));
+        mortgageGroup.addView(mortgageSepUnknown, new LinearLayout.LayoutParams(dp(32), dp(40)));
         mortgageGroup.addView(mortgageUnknown, new LinearLayout.LayoutParams(dp(72), dp(40)));
         mortgageRow.addView(mortgageGroup, new LinearLayout.LayoutParams(0, dp(40), 1));
         body.addView(info);
@@ -295,6 +297,7 @@ public class MainActivity extends Activity {
         body.addView(step(null, "债务明细", "+ 添加"));
         debtRows = new LinearLayout(this);
         debtRows.setOrientation(LinearLayout.VERTICAL);
+        debtRows.setLayoutTransition(smoothTransition());
         body.addView(debtRows);
 
         body.addView(step(null, "其他信息", null));
@@ -369,20 +372,29 @@ public class MainActivity extends Activity {
 
     private void renderDebts() {
         debtRows.removeAllViews();
+        openDebtSwipeCard = null;
+        openDebtDeleteAction = null;
         for (int i = 0; i < drafts.size(); i++) {
             DebtDraft d = drafts.get(i);
             boolean expanded = i == expandedDebtIndex;
             boolean hasContent = hasDebtContent(d);
             boolean showSummary = !expanded || hasContent;
+            SwipeFrameLayout swipeWrap = new SwipeFrameLayout(this);
+            Button deleteAction = debtDeleteButton();
+            deleteAction.setVisibility(View.INVISIBLE);
+            FrameLayout.LayoutParams deleteLp = new FrameLayout.LayoutParams(dp(DEBT_DELETE_DP), -1, Gravity.RIGHT);
+            swipeWrap.addView(deleteAction, deleteLp);
             LinearLayout card = debtCard();
             card.setTag(d);
-            card.setMinimumHeight(expanded ? dp(showSummary ? 246 : 210) : dp(96));
-            debtRows.addView(card, margin(-1, -2, 0, 0, 0, dp(14)));
+            card.setMinimumHeight(expanded ? dp(showSummary ? 228 : 198) : dp(78));
+            swipeWrap.addView(card, new FrameLayout.LayoutParams(-1, -2));
+            debtRows.addView(swipeWrap, margin(-1, -2, 0, 0, 0, dp(10)));
 
             LinearLayout summary = new LinearLayout(this);
             summary.setGravity(Gravity.CENTER_VERTICAL);
-            summary.setPadding(dp(14), dp(14), dp(12), 0);
+            summary.setPadding(dp(14), dp(6), dp(12), 0);
             TypeIconView typeIcon = new TypeIconView(this, d.type);
+            typeIcon.setTag("typeIcon");
             LinearLayout title = debtSummaryTitle(d);
             Button pill = statusPill(d.status);
             ChevronView arrow = new ChevronView(this, expanded);
@@ -392,10 +404,8 @@ public class MainActivity extends Activity {
             summary.addView(arrow, new LinearLayout.LayoutParams(dp(34), dp(38)));
             card.addView(summary);
             final int index = i;
-            card.setOnLongClickListener(v -> {
-                confirmDeleteDebt(index);
-                return true;
-            });
+            deleteAction.setOnClickListener(v -> confirmDeleteDebt(index));
+            swipeWrap.configureSwipe(card, deleteAction);
             arrow.setOnClickListener(v -> {
                 syncDrafts();
                 expandedDebtIndex = expandedDebtIndex == index ? -1 : index;
@@ -404,17 +414,23 @@ public class MainActivity extends Activity {
 
             if (showSummary) {
                 TextView meta = label(debtSummaryMeta(d, hasContent), META_SP, MUTED, Typeface.NORMAL);
-                meta.setPadding(dp(48), 0, dp(12), dp(14));
-                card.addView(meta, new LinearLayout.LayoutParams(-1, dp(36)));
+                meta.setPadding(dp(48), 0, dp(12), dp(6));
+                card.addView(meta, new LinearLayout.LayoutParams(-1, dp(28)));
             }
 
             if (expanded) {
+                LinearLayout expandedContent = new LinearLayout(this);
+                expandedContent.setOrientation(LinearLayout.VERTICAL);
+                expandedContent.setAlpha(0f);
+                expandedContent.setTranslationY(dp(-4));
                 insetDivider(card, dp(48), dp(30));
-                TextView type = segmentedTypeRow(card, d.type);
-                EditText creditor = textEditRow(card, "机构", d.creditor, "creditor");
-                EditText amount = textEditRow(card, "金额(万)", d.amount, "amount");
-                Button status = selectEditRow(card, "状态", d.status, "status", "›");
-                Button due = selectEditRow(card, "到期日期", d.dueDate.isEmpty() ? "选择日期" : d.dueDate, "dueDate", "▣");
+                TextView type = segmentedTypeRow(expandedContent, d.type);
+                EditText creditor = textEditRow(expandedContent, "机构", d.creditor, "creditor");
+                EditText amount = textEditRow(expandedContent, "金额(万)", d.amount, "amount");
+                Button status = selectEditRow(expandedContent, "状态", d.status, "status", "›");
+                Button due = selectEditRow(expandedContent, "到期日期", d.dueDate.isEmpty() ? "选择日期" : d.dueDate, "dueDate", "▣");
+                card.addView(expandedContent);
+                expandedContent.animate().alpha(1f).translationY(0).setDuration(180).start();
                 status.setOnClickListener(v -> chooseStatus(status, statuses));
                 due.setOnClickListener(v -> chooseDate(due, status));
                 paintStatus(status, status.getText().toString());
@@ -436,6 +452,7 @@ public class MainActivity extends Activity {
         LinearLayout title = new LinearLayout(this);
         title.setGravity(Gravity.CENTER_VERTICAL);
         TextView type = label(d.type, PRIMARY_SP, INK, Typeface.BOLD);
+        type.setTag("summaryType");
         type.setSingleLine(true);
         title.addView(type, new LinearLayout.LayoutParams(-2, dp(38)));
         if (!d.creditor.isEmpty()) {
@@ -474,11 +491,81 @@ public class MainActivity extends Activity {
             .show();
     }
 
+    private Button debtDeleteButton() {
+        Button button = new Button(this);
+        button.setText("删除");
+        button.setTextSize(BODY_SP);
+        button.setTextColor(Color.WHITE);
+        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        button.setAllCaps(false);
+        button.setPadding(0, 0, 0, 0);
+        button.setMinHeight(0);
+        button.setMinWidth(0);
+        button.setAlpha(0f);
+        button.setBackground(rightRound(DANGER, 12));
+        button.setStateListAnimator(null);
+        return button;
+    }
+
+    private void moveDebtSwipe(View swipeTarget, View deleteAction, float dx) {
+        swipeTarget.animate().cancel();
+        if (openDebtSwipeCard != null && openDebtSwipeCard != swipeTarget) {
+            View previousDelete = openDebtDeleteAction;
+            closeDebtSwipe(openDebtSwipeCard, previousDelete, 100);
+        }
+        float move = Math.max(-dp(DEBT_DELETE_DP), Math.min(0, dx));
+        swipeTarget.setTranslationX(move);
+        syncDebtDeleteVisibility(swipeTarget, deleteAction);
+    }
+
+    private void settleDebtSwipe(View swipeTarget, View deleteAction) {
+        boolean open = swipeTarget.getTranslationX() < -dp(DEBT_DELETE_DP / 2f);
+        swipeTarget.animate().cancel();
+        deleteAction.animate().cancel();
+        swipeTarget.animate()
+            .translationX(open ? -dp(DEBT_DELETE_DP) : 0)
+            .setDuration(120)
+            .setUpdateListener((ValueAnimator animation) -> syncDebtDeleteVisibility(swipeTarget, deleteAction))
+            .withEndAction(() -> {
+                swipeTarget.animate().setUpdateListener(null);
+                syncDebtDeleteVisibility(swipeTarget, deleteAction);
+            })
+            .start();
+        openDebtSwipeCard = open ? swipeTarget : null;
+        openDebtDeleteAction = open ? deleteAction : null;
+    }
+
+    private void closeDebtSwipe(View swipeTarget, View deleteAction, long duration) {
+        if (swipeTarget == null) return;
+        swipeTarget.animate().cancel();
+        swipeTarget.animate()
+            .translationX(0)
+            .setDuration(duration)
+            .setUpdateListener((ValueAnimator animation) -> syncDebtDeleteVisibility(swipeTarget, deleteAction))
+            .withEndAction(() -> {
+                swipeTarget.animate().setUpdateListener(null);
+                syncDebtDeleteVisibility(swipeTarget, deleteAction);
+            })
+            .start();
+    }
+
+    private void syncDebtDeleteVisibility(View swipeTarget, View deleteAction) {
+        if (deleteAction == null) return;
+        float shown = Math.abs(swipeTarget == null ? 0 : swipeTarget.getTranslationX());
+        if (shown <= dp(2)) {
+            deleteAction.setAlpha(0f);
+            deleteAction.setVisibility(View.INVISIBLE);
+            return;
+        }
+        deleteAction.setVisibility(View.VISIBLE);
+        deleteAction.setAlpha(Math.min(1f, shown / dp(DEBT_DELETE_DP)));
+    }
+
     private void syncDrafts() {
         for (int i = 0; i < debtRows.getChildCount(); i++) {
             View v = debtRows.getChildAt(i);
-            if (!(v instanceof LinearLayout) || !(v.getTag() instanceof DebtDraft)) continue;
-            LinearLayout card = (LinearLayout) v;
+            LinearLayout card = debtCardFrom(v);
+            if (card == null || !(card.getTag() instanceof DebtDraft)) continue;
             DebtDraft d = (DebtDraft) card.getTag();
             TextView type = card.findViewWithTag("type");
             EditText creditor = card.findViewWithTag("creditor");
@@ -495,11 +582,34 @@ public class MainActivity extends Activity {
         }
     }
 
+    private LinearLayout debtCardFrom(View view) {
+        if (view instanceof LinearLayout && view.getTag() instanceof DebtDraft) return (LinearLayout) view;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                View child = group.getChildAt(i);
+                if (child instanceof LinearLayout && child.getTag() instanceof DebtDraft) return (LinearLayout) child;
+            }
+        }
+        return null;
+    }
+
     private void addDebtCard() {
         syncDrafts();
         drafts.add(new DebtDraft());
         expandedDebtIndex = drafts.size() - 1;
         renderDebts();
+    }
+
+    private LayoutTransition smoothTransition() {
+        LayoutTransition transition = new LayoutTransition();
+        transition.enableTransitionType(LayoutTransition.CHANGING);
+        transition.setDuration(LayoutTransition.APPEARING, 160);
+        transition.setDuration(LayoutTransition.DISAPPEARING, 120);
+        transition.setDuration(LayoutTransition.CHANGE_APPEARING, 190);
+        transition.setDuration(LayoutTransition.CHANGE_DISAPPEARING, 170);
+        transition.setDuration(LayoutTransition.CHANGING, 190);
+        return transition;
     }
 
     private boolean hasDebtContent(DebtDraft d) {
@@ -697,6 +807,13 @@ public class MainActivity extends Activity {
             TextView option = segmentOption(type, type.equals(value));
             option.setOnClickListener(v -> {
                 holder.setText(type);
+                LinearLayout card = (LinearLayout) parent.getParent();
+                DebtDraft draft = card != null && card.getTag() instanceof DebtDraft ? (DebtDraft) card.getTag() : null;
+                if (draft != null) draft.type = type;
+                TextView summaryType = card == null ? null : card.findViewWithTag("summaryType");
+                if (summaryType != null) summaryType.setText(type);
+                TypeIconView typeIcon = card == null ? null : card.findViewWithTag("typeIcon");
+                if (typeIcon != null) typeIcon.setType(type);
                 for (int j = 0; j < group.getChildCount(); j++) {
                     View child = group.getChildAt(j);
                     if (child instanceof TextView) {
@@ -765,13 +882,10 @@ public class MainActivity extends Activity {
         return v;
     }
 
-    private EditText rowInput(LinearLayout box, String label, String hint) {
-        return rowInput(box, label, hint, dp(96));
-    }
-
     private EditText rowInput(LinearLayout box, String label, String hint, int labelWidth) {
         LinearLayout r = row(box, label, labelWidth);
         EditText e = input(hint);
+        e.setPadding(dp(10), 0, dp(10), 0);
         r.addView(e, new LinearLayout.LayoutParams(0, dp(40), 1));
         return e;
     }
@@ -808,7 +922,7 @@ public class MainActivity extends Activity {
     private LinearLayout debtCard() {
         LinearLayout b = new LinearLayout(this);
         b.setOrientation(LinearLayout.VERTICAL);
-        b.setBackground(round(PAPER, Color.rgb(225, 229, 227), 12));
+        b.setBackground(round(PAPER, LINE, 12));
         return b;
     }
 
@@ -872,34 +986,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    private EditText smallInput(String hint) {
-        EditText e = input(hint);
-        e.setSingleLine(true);
-        e.setGravity(Gravity.CENTER);
-        return e;
-    }
-
-    private Spinner spinner(String[] values, String selected) {
-        Spinner s = new Spinner(this);
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, values);
-        s.setAdapter(adapter);
-        for (int i = 0; i < values.length; i++) if (values[i].equals(selected)) s.setSelection(i);
-        s.setBackground(round(TEAL_SOFT, TEAL_SOFT, 6));
-        return s;
-    }
-
-    private Button selectButton(String text) {
-        Button b = new Button(this);
-        b.setText(text);
-        b.setTextSize(BODY_SP);
-        b.setTextColor(MUTED);
-        b.setAllCaps(false);
-        b.setGravity(Gravity.CENTER);
-        b.setPadding(0, 0, 0, 0);
-        b.setBackground(round(TEAL_SOFT, TEAL_SOFT, 6));
-        return b;
-    }
-
     private Button editValueButton(String text, String suffix) {
         Button b = new Button(this);
         b.setText(suffix.isEmpty() ? text : text + "   " + suffix);
@@ -913,12 +999,6 @@ public class MainActivity extends Activity {
         b.setIncludeFontPadding(false);
         b.setBackgroundColor(Color.TRANSPARENT);
         return b;
-    }
-
-    private void chooseValue(Button target, String[] values) {
-        new AlertDialog.Builder(this)
-            .setItems(values, (dialog, which) -> target.setText(values[which] + "   ›"))
-            .show();
     }
 
     private void chooseStatus(Button target, String[] values) {
@@ -1011,10 +1091,6 @@ public class MainActivity extends Activity {
         return b;
     }
 
-    private Button plain(String text) {
-        return textButton(text, SMALL_SP);
-    }
-
     private Button textButton(String text, float size) {
         Button b = new Button(this);
         b.setText(text);
@@ -1063,7 +1139,7 @@ public class MainActivity extends Activity {
     }
 
     private void signature() {
-        TextView s = label("轻债助手 · v 1.2.0", SMALL_SP, Color.rgb(168, 176, 173), Typeface.NORMAL);
+        TextView s = label("轻债助手 · v 1.2.3", SMALL_SP, Color.rgb(168, 176, 173), Typeface.NORMAL);
         s.setGravity(Gravity.CENTER);
         body.addView(s, new LinearLayout.LayoutParams(-1, dp(52)));
     }
@@ -1128,7 +1204,7 @@ public class MainActivity extends Activity {
         try {
             JSONObject backup = new JSONObject();
             backup.put("app", "debt-customer-archive");
-            backup.put("version", "1.2.0");
+            backup.put("version", "1.2.3");
             backup.put("storageKey", STORE);
             backup.put("exportedAt", iso());
             JSONArray clients = new JSONArray();
@@ -1334,6 +1410,14 @@ public class MainActivity extends Activity {
         return d;
     }
 
+    private GradientDrawable rightRound(int color, int radius) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(color);
+        float r = dp(radius);
+        d.setCornerRadii(new float[]{0, 0, r, r, r, r, 0, 0});
+        return d;
+    }
+
     private GradientDrawable dashedRound(int color, int stroke, int radius) {
         GradientDrawable d = new GradientDrawable();
         d.setColor(color);
@@ -1355,9 +1439,64 @@ public class MainActivity extends Activity {
     }
     private int dp(float v) { return (int) (v * getResources().getDisplayMetrics().density + .5f); }
 
+    private class SwipeFrameLayout extends FrameLayout {
+        private View swipeTarget;
+        private View deleteAction;
+        private float startX;
+        private float startY;
+        private boolean swiping;
+
+        SwipeFrameLayout(Context context) {
+            super(context);
+        }
+
+        void configureSwipe(View swipeTarget, View deleteAction) {
+            this.swipeTarget = swipeTarget;
+            this.deleteAction = deleteAction;
+        }
+
+        @Override
+        public boolean onInterceptTouchEvent(MotionEvent event) {
+            if (swipeTarget == null || deleteAction == null) return super.onInterceptTouchEvent(event);
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    startX = event.getRawX();
+                    startY = event.getRawY();
+                    swiping = false;
+                    return false;
+                case MotionEvent.ACTION_MOVE:
+                    float dx = event.getRawX() - startX;
+                    float dy = event.getRawY() - startY;
+                    if (Math.abs(dx) > dp(8) && Math.abs(dx) > Math.abs(dy) * 1.3f) {
+                        swiping = true;
+                        return true;
+                    }
+                    return false;
+            }
+            return super.onInterceptTouchEvent(event);
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent event) {
+            if (swipeTarget == null || deleteAction == null) return super.onTouchEvent(event);
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_MOVE:
+                    moveDebtSwipe(swipeTarget, deleteAction, event.getRawX() - startX);
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    settleDebtSwipe(swipeTarget, deleteAction);
+                    swiping = false;
+                    return true;
+            }
+            return swiping || super.onTouchEvent(event);
+        }
+    }
+
     private class TypeIconView extends View {
-        private final String type;
+        private String type;
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         TypeIconView(Context context, String type) {
             super(context);
@@ -1367,6 +1506,15 @@ public class MainActivity extends Activity {
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeCap(Paint.Cap.ROUND);
             paint.setStrokeJoin(Paint.Join.ROUND);
+            textPaint.setColor(Color.rgb(156, 166, 163));
+            textPaint.setTextAlign(Paint.Align.CENTER);
+            textPaint.setTypeface(Typeface.DEFAULT_BOLD);
+            textPaint.setTextSize(dp(8.5f));
+        }
+
+        void setType(String type) {
+            this.type = type == null ? "" : type;
+            invalidate();
         }
 
         @Override
@@ -1384,10 +1532,27 @@ public class MainActivity extends Activity {
         }
 
         private void drawPhone(Canvas canvas, float cx, float cy) {
-            RectF body = new RectF(cx - dp(5.5f), cy - dp(9), cx + dp(5.5f), cy + dp(9));
-            canvas.drawRoundRect(body, dp(2), dp(2), paint);
-            canvas.drawLine(cx - dp(2.5f), cy + dp(5.5f), cx + dp(2.5f), cy + dp(5.5f), paint);
-            canvas.drawCircle(cx + dp(6.7f), cy - dp(3.5f), dp(2), paint);
+            float left = cx - dp(9);
+            float top = cy - dp(10);
+            float right = cx + dp(3);
+            float bottom = cy + dp(8);
+            float radius = dp(2);
+            RectF topLeft = new RectF(left, top, left + radius * 2, top + radius * 2);
+            RectF topRight = new RectF(right - radius * 2, top, right, top + radius * 2);
+            RectF bottomLeft = new RectF(left, bottom - radius * 2, left + radius * 2, bottom);
+            canvas.drawArc(topLeft, 180, 90, false, paint);
+            canvas.drawArc(topRight, 270, 90, false, paint);
+            canvas.drawArc(bottomLeft, 90, 90, false, paint);
+            canvas.drawLine(left + radius, top, right - radius, top, paint);
+            canvas.drawLine(left, top + radius, left, bottom - radius, paint);
+            canvas.drawLine(right, top + radius, right, cy - dp(2.2f), paint);
+            canvas.drawLine(left + radius, bottom, cx - dp(1.4f), bottom, paint);
+            float coinX = cx + dp(5.2f);
+            float coinY = cy + dp(4.8f);
+            canvas.drawCircle(coinX, coinY, dp(5.4f), paint);
+            Paint.FontMetrics metrics = textPaint.getFontMetrics();
+            float baseline = coinY - (metrics.ascent + metrics.descent) / 2f;
+            canvas.drawText("¥", coinX, baseline, textPaint);
         }
 
         private void drawCard(Canvas canvas, float cx, float cy) {
