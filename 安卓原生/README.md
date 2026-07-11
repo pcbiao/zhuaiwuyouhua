@@ -17,8 +17,15 @@
 - 客户详情和债务优化方案
 - 本机 JSON 存储
 - JSON 导入/导出
+- 离线设备绑定激活
+
+## 激活码生成
+
+- 工具目录：`激活生成工具/`
+- 命令行：`node 激活生成工具/generate-license.js QZ-9CD8-3773`
+- macOS 可双击运行：`激活生成工具/激活码生成.command`
 
 ## 版本
 
-- Android `versionName`: `1.2.3`
-- Android `versionCode`: `123`
+- Android `versionName`: `1.4.1`
+- Android `versionCode`: `141`

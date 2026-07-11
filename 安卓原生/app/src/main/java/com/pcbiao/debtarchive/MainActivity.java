@@ -5,6 +5,8 @@ import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -17,6 +19,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.TextUtils;
@@ -39,6 +42,7 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -53,6 +57,10 @@ import java.util.Calendar;
 
 public class MainActivity extends Activity {
     private static final String STORE = "debtCustomerArchiveV150";
+    private static final String LICENSE_PREF = "debtArchiveLicense";
+    private static final String LICENSE_ACTIVE = "activated";
+    private static final String LICENSE_FALLBACK_ID = "fallbackDeviceId";
+    private static final String LICENSE_SECRET = "QZ_DEBT_ARCHIVE_2026_DEVICE_LICENSE";
     private static final int TEAL = Color.rgb(8, 118, 111);
     private static final int TEAL_SOFT = Color.rgb(237, 248, 246);
     private static final int INK = Color.rgb(21, 31, 29);
@@ -70,7 +78,6 @@ public class MainActivity extends Activity {
     private static final float SMALL_SP = 13f;
     private static final float ACTION_SP = 15f;
     private static final float FILTER_SP = 14f;
-    private static final int INFO_LABEL_DP = 132;
     private static final int DEBT_DELETE_DP = 56;
     private static final int DEBT_DELETE_OVERLAP_DP = 12;
     private static final int REQ_IMPORT = 701;
@@ -95,7 +102,7 @@ public class MainActivity extends Activity {
     private EditText incomeField;
     private EditText concernField;
     private LinearLayout debtRows;
-    private int expandedDebtIndex = 0;
+    private int expandedDebtIndex = -1;
     private View openDebtSwipeCard;
     private View openDebtDeleteAction;
     private final List<DebtDraft> drafts = new ArrayList<>();
@@ -106,7 +113,8 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE | WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
-        showHome();
+        if (isActivated()) showHome();
+        else showActivation();
     }
 
     @Override
@@ -119,6 +127,10 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if ("activation".equals(screen)) {
+            moveTaskToBack(true);
+            return;
+        }
         if ("form".equals(screen)) {
             if (!editingId.isEmpty()) showDetail(selectedId);
             else showHome();
@@ -151,9 +163,9 @@ public class MainActivity extends Activity {
         pageTitle = label(title, TITLE_SP, INK, Typeface.BOLD);
         pageTitle.setGravity(Gravity.CENTER);
         rightAction = topButton("");
-        top.addView(leftAction, new LinearLayout.LayoutParams(dp(76), -1));
+        top.addView(leftAction, new LinearLayout.LayoutParams(topActionWidth(), -1));
         top.addView(pageTitle, new LinearLayout.LayoutParams(0, -1, 1));
-        top.addView(rightAction, new LinearLayout.LayoutParams(dp(76), -1));
+        top.addView(rightAction, new LinearLayout.LayoutParams(topActionWidth(), -1));
 
         ScrollView scroll = new ScrollView(this);
         pageScroll = scroll;
@@ -165,6 +177,56 @@ public class MainActivity extends Activity {
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         installKeyboardAvoidance(frame);
+    }
+
+    private void showActivation() {
+        screen = "activation";
+        base("激活轻债助手");
+        leftAction.setEnabled(false);
+        rightAction.setEnabled(false);
+
+        body.addView(step(null, "设备激活", null));
+        LinearLayout box = box();
+        TextView tip = label("请把设备码发给管理员，获取对应激活码。", META_SP, MUTED, Typeface.NORMAL);
+        tip.setPadding(dp(12), dp(12), dp(12), dp(8));
+        box.addView(tip, new LinearLayout.LayoutParams(-1, dp(48)));
+        divider(box);
+
+        TextView device = label(getDeviceCode(), PRIMARY_SP, INK, Typeface.BOLD);
+        device.setGravity(Gravity.CENTER);
+        device.setTextIsSelectable(true);
+        box.addView(device, new LinearLayout.LayoutParams(-1, dp(48)));
+        divider(box);
+
+        Button copy = textButton("复制设备码", ACTION_SP);
+        box.addView(copy, new LinearLayout.LayoutParams(-1, dp(44)));
+        body.addView(box);
+
+        EditText code = input("请输入激活码");
+        code.setSingleLine(true);
+        code.setGravity(Gravity.CENTER);
+        body.addView(code, margin(-1, dp(48), 0, dp(18), 0, 0));
+
+        Button activate = primary("激活");
+        body.addView(activate, margin(-1, dp(44), 0, dp(12), 0, 0));
+        signature();
+
+        copy.setOnClickListener(v -> {
+            ClipboardManager manager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (manager != null) {
+                manager.setPrimaryClip(ClipData.newPlainText("设备码", getDeviceCode()));
+                Toast.makeText(this, "设备码已复制", Toast.LENGTH_SHORT).show();
+            }
+        });
+        activate.setOnClickListener(v -> {
+            if (isValidActivationCode(code.getText().toString())) {
+                setActivated();
+                Toast.makeText(this, "激活成功", Toast.LENGTH_SHORT).show();
+                showHome();
+            } else {
+                Toast.makeText(this, "激活码不正确", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private void showHome() {
@@ -272,10 +334,10 @@ public class MainActivity extends Activity {
 
         body.addView(step(null, "客户信息", null));
         LinearLayout info = box();
-        nameField = rowInput(info, "姓名：", "请输入姓名", dp(INFO_LABEL_DP));
-        phoneField = rowInput(info, "联系电话：", "请输入手机号", dp(INFO_LABEL_DP));
-        incomeField = rowInput(info, "月收入：", "请输入金额", dp(INFO_LABEL_DP));
-        LinearLayout mortgageRow = row(info, "是否有房贷：", dp(INFO_LABEL_DP));
+        nameField = rowInput(info, "姓名：", "请输入姓名", infoLabelWidth());
+        phoneField = rowInput(info, "联系电话：", "请输入手机号", infoLabelWidth());
+        incomeField = rowInput(info, "月收入：", "请输入金额", infoLabelWidth());
+        LinearLayout mortgageRow = row(info, "是否有房贷：", infoLabelWidth());
         LinearLayout mortgageGroup = new LinearLayout(this);
         mortgageGroup.setGravity(Gravity.CENTER_VERTICAL);
         mortgageGroup.setPadding(dp(10), 0, 0, 0);
@@ -317,7 +379,7 @@ public class MainActivity extends Activity {
         hasMortgage = "否";
         if (client != null) fillForm(client);
         if (drafts.isEmpty()) drafts.add(new DebtDraft());
-        expandedDebtIndex = drafts.size() - 1;
+        expandedDebtIndex = -1;
         paintMortgageOption(mortgageYes, "有".equals(hasMortgage));
         paintMortgageOption(mortgageNo, "否".equals(hasMortgage));
         paintMortgageOption(mortgageUnknown, "不确定".equals(hasMortgage));
@@ -793,14 +855,14 @@ public class MainActivity extends Activity {
     }
 
     private TextView segmentedTypeRow(LinearLayout parent, String value) {
-        LinearLayout row = editBaseRow(parent, "类型");
+        LinearLayout row = editBaseRow(parent, "类型", typeLabelWidth());
         TextView holder = new TextView(this);
         holder.setTag("type");
         holder.setText(value);
         holder.setVisibility(View.GONE);
         LinearLayout group = new LinearLayout(this);
         group.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
-        group.setPadding(0, 0, dp(18), 0);
+        group.setPadding(0, 0, typeGroupRightPadding(), 0);
         row.addView(holder, new LinearLayout.LayoutParams(0, 0));
         row.addView(group, new LinearLayout.LayoutParams(0, dp(48), 1));
         for (int i = 0; i < debtTypes.length; i++) {
@@ -828,7 +890,7 @@ public class MainActivity extends Activity {
             if (i < debtTypes.length - 1) {
                 TextView sep = label("|", BODY_SP, MUTED, Typeface.NORMAL);
                 sep.setGravity(Gravity.CENTER);
-                group.addView(sep, new LinearLayout.LayoutParams(dp(12), dp(40)));
+                group.addView(sep, new LinearLayout.LayoutParams(typeSeparatorWidth(), dp(40)));
             }
         }
         return holder;
@@ -865,12 +927,16 @@ public class MainActivity extends Activity {
     }
 
     private LinearLayout editBaseRow(LinearLayout parent, String text) {
+        return editBaseRow(parent, text, editLabelWidth());
+    }
+
+    private LinearLayout editBaseRow(LinearLayout parent, String text, int labelWidth) {
         insetDivider(parent, dp(48), dp(30));
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         TextView label = label(text, BODY_SP, MUTED, Typeface.NORMAL);
         label.setPadding(dp(48), 0, 0, 0);
-        row.addView(label, new LinearLayout.LayoutParams(dp(168), dp(48)));
+        row.addView(label, new LinearLayout.LayoutParams(labelWidth, dp(48)));
         parent.addView(row, new LinearLayout.LayoutParams(-1, dp(48)));
         return row;
     }
@@ -878,6 +944,9 @@ public class MainActivity extends Activity {
     private TextView cell(String text, float weight, int color) {
         TextView v = label(text, SMALL_SP, color, Typeface.NORMAL);
         v.setGravity(Gravity.CENTER);
+        v.setSingleLine(true);
+        v.setEllipsize(TextUtils.TruncateAt.END);
+        v.setIncludeFontPadding(false);
         v.setBackgroundColor(Color.TRANSPARENT);
         v.setLayoutParams(new LinearLayout.LayoutParams(0, dp(40), weight));
         return v;
@@ -1140,9 +1209,59 @@ public class MainActivity extends Activity {
     }
 
     private void signature() {
-        TextView s = label("轻债助手 · v 1.2.3", SMALL_SP, Color.rgb(168, 176, 173), Typeface.NORMAL);
+        TextView s = label("轻债助手 · v 1.4.1", SMALL_SP, Color.rgb(168, 176, 173), Typeface.NORMAL);
         s.setGravity(Gravity.CENTER);
         body.addView(s, new LinearLayout.LayoutParams(-1, dp(52)));
+    }
+
+    private boolean isActivated() {
+        return getSharedPreferences(LICENSE_PREF, Context.MODE_PRIVATE).getBoolean(LICENSE_ACTIVE, false);
+    }
+
+    private void setActivated() {
+        getSharedPreferences(LICENSE_PREF, Context.MODE_PRIVATE).edit().putBoolean(LICENSE_ACTIVE, true).apply();
+    }
+
+    private String getDeviceCode() {
+        String seed = "";
+        try {
+            seed = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+        } catch (Exception ignored) {}
+        if (seed == null || seed.trim().isEmpty()) {
+            SharedPreferences sp = getSharedPreferences(LICENSE_PREF, Context.MODE_PRIVATE);
+            seed = sp.getString(LICENSE_FALLBACK_ID, "");
+            if (seed.isEmpty()) {
+                seed = UUID.randomUUID().toString();
+                sp.edit().putString(LICENSE_FALLBACK_ID, seed).apply();
+            }
+        }
+        String hash = sha256(getPackageName() + "|" + seed);
+        return "QZ-" + hash.substring(0, 4) + "-" + hash.substring(4, 8);
+    }
+
+    private boolean isValidActivationCode(String value) {
+        return normalizeCode(value).equals(normalizeCode(activationCodeFor(getDeviceCode())));
+    }
+
+    private String activationCodeFor(String deviceCode) {
+        String hash = sha256(LICENSE_SECRET + "|" + normalizeCode(deviceCode));
+        return "QZ-" + hash.substring(0, 4) + "-" + hash.substring(4, 8) + "-" + hash.substring(8, 12);
+    }
+
+    private String normalizeCode(String value) {
+        return (value == null ? "" : value).toUpperCase(Locale.US).replaceAll("[^A-Z0-9]", "");
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(value.getBytes("UTF-8"));
+            StringBuilder out = new StringBuilder();
+            for (byte b : bytes) out.append(String.format(Locale.US, "%02X", b));
+            return out.toString();
+        } catch (Exception e) {
+            return "0000000000000000";
+        }
     }
 
     private List<JSONObject> loadClients() {
@@ -1205,7 +1324,7 @@ public class MainActivity extends Activity {
         try {
             JSONObject backup = new JSONObject();
             backup.put("app", "debt-customer-archive");
-            backup.put("version", "1.2.3");
+            backup.put("version", "1.4.1");
             backup.put("storageKey", STORE);
             backup.put("exportedAt", iso());
             JSONArray clients = new JSONArray();
@@ -1434,6 +1553,14 @@ public class MainActivity extends Activity {
     }
 
     private int screenWidth() { return getResources().getDisplayMetrics().widthPixels; }
+    private int contentWidthDp() { return (int) (Math.min(screenWidth(), dp(430)) / getResources().getDisplayMetrics().density); }
+    private boolean isNarrowContent() { return contentWidthDp() < 390; }
+    private int topActionWidth() { return dp(isNarrowContent() ? 68 : 76); }
+    private int infoLabelWidth() { return dp(isNarrowContent() ? 116 : 132); }
+    private int editLabelWidth() { return dp(isNarrowContent() ? 132 : 168); }
+    private int typeLabelWidth() { return dp(isNarrowContent() ? 112 : 168); }
+    private int typeGroupRightPadding() { return dp(isNarrowContent() ? 4 : 18); }
+    private int typeSeparatorWidth() { return dp(isNarrowContent() ? 8 : 12); }
     private int topInset() {
         int id = getResources().getIdentifier("status_bar_height", "dimen", "android");
         return (id > 0 ? getResources().getDimensionPixelSize(id) : dp(24)) + dp(8);
