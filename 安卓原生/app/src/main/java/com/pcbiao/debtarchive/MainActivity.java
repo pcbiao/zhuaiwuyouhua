@@ -1,7 +1,6 @@
 package com.pcbiao.debtarchive;
 
 import android.animation.LayoutTransition;
-import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
@@ -9,26 +8,17 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.Rect;
-import android.graphics.RectF;
 import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.style.ForegroundColorSpan;
 import android.view.Gravity;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
@@ -42,27 +32,21 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.Calendar;
 
+import static com.pcbiao.debtarchive.AppFormatter.cleanValue;
+import static com.pcbiao.debtarchive.AppFormatter.empty;
+import static com.pcbiao.debtarchive.AppFormatter.fmt;
+import static com.pcbiao.debtarchive.AppFormatter.opt;
+import static com.pcbiao.debtarchive.AppFormatter.valid;
+
 public class MainActivity extends Activity {
-    private static final String STORE = "debtCustomerArchiveV150";
-    private static final String LICENSE_PREF = "debtArchiveLicense";
-    private static final String LICENSE_ACTIVE = "activated";
-    private static final String LICENSE_FALLBACK_ID = "fallbackDeviceId";
-    private static final String LICENSE_SECRET = "QZ_DEBT_ARCHIVE_2026_DEVICE_LICENSE";
     private static final int TEAL = Color.rgb(8, 118, 111);
-    private static final int TEAL_SOFT = Color.rgb(237, 248, 246);
     private static final int INK = Color.rgb(21, 31, 29);
     private static final int MUTED = Color.rgb(109, 119, 116);
     private static final int LINE = Color.rgb(158, 170, 166);
@@ -86,8 +70,7 @@ public class MainActivity extends Activity {
     private LinearLayout root;
     private LinearLayout body;
     private ScrollView pageScroll;
-    private int baseScrollPaddingBottom = 0;
-    private View focusedInput;
+    private KeyboardAvoider keyboardAvoider;
     private TextView pageTitle;
     private Button leftAction;
     private Button rightAction;
@@ -103,15 +86,27 @@ public class MainActivity extends Activity {
     private EditText concernField;
     private LinearLayout debtRows;
     private int expandedDebtIndex = -1;
-    private View openDebtSwipeCard;
-    private View openDebtDeleteAction;
     private final List<DebtDraft> drafts = new ArrayList<>();
+    private ActivationManager activationManager;
+    private ClientRepository clientRepository;
+    private BackupManager backupManager;
+    private UiMetrics uiMetrics;
+    private ClientArchiveService clientArchiveService;
+    private DebtSwipeController debtSwipeController;
+    private ClientQueryService clientQueryService;
     private final String[] debtTypes = {"网贷", "信用卡", "银行贷款"};
     private final String[] statuses = {"正常", "提醒", "逾期", "催收", "协商", "结清"};
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        activationManager = new ActivationManager(this);
+        clientRepository = new ClientRepository(this);
+        backupManager = new BackupManager(getContentResolver(), clientRepository);
+        uiMetrics = new UiMetrics(this);
+        clientArchiveService = new ClientArchiveService(clientRepository);
+        debtSwipeController = new DebtSwipeController(uiMetrics);
+        clientQueryService = new ClientQueryService(clientRepository);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE | WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
         if (isActivated()) showHome();
         else showActivation();
@@ -170,13 +165,13 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         pageScroll = scroll;
         pageScroll.setClipToPadding(false);
-        baseScrollPaddingBottom = dp(24);
-        pageScroll.setPadding(0, 0, 0, baseScrollPaddingBottom);
+        pageScroll.setPadding(0, 0, 0, dp(24));
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        installKeyboardAvoidance(frame);
+        keyboardAvoider = new KeyboardAvoider(pageScroll);
+        keyboardAvoider.install(frame);
     }
 
     private void showActivation() {
@@ -284,16 +279,9 @@ public class MainActivity extends Activity {
 
     private void renderList(LinearLayout list, String query) {
         list.removeAllViews();
-        List<JSONObject> clients = loadClients();
-        Collections.sort(clients, (a, b) -> opt(b, "updatedAt").compareTo(opt(a, "updatedAt")));
         String q = query.trim().toLowerCase(Locale.CHINA);
-        int count = 0;
+        List<JSONObject> clients = clientQueryService.find(query, "alert".equals(clientFilterMode));
         for (JSONObject c : clients) {
-            String name = opt(c, "name").toLowerCase(Locale.CHINA);
-            String phone = opt(c, "phone");
-            if (!q.isEmpty() && !name.contains(q) && !phone.contains(q)) continue;
-            if (q.isEmpty() && "alert".equals(clientFilterMode) && !hasDueAlert(c)) continue;
-            count++;
             Button card = new Button(this);
             card.setAllCaps(false);
             card.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
@@ -317,7 +305,7 @@ public class MainActivity extends Activity {
             list.addView(card, new LinearLayout.LayoutParams(-1, dp(alertText.isEmpty() ? 68 : 88)));
             divider(list);
         }
-        if (count == 0) list.addView(padText(q.isEmpty() ? "还没有保存客户档案。" : "没有找到这个客户。"));
+        if (clients.isEmpty()) list.addView(padText(q.isEmpty() ? "还没有保存客户档案。" : "没有找到这个客户。"));
     }
 
     private void showForm(JSONObject client) {
@@ -435,8 +423,7 @@ public class MainActivity extends Activity {
 
     private void renderDebts() {
         debtRows.removeAllViews();
-        openDebtSwipeCard = null;
-        openDebtDeleteAction = null;
+        debtSwipeController.reset();
         for (int i = 0; i < drafts.size(); i++) {
             DebtDraft d = drafts.get(i);
             boolean expanded = i == expandedDebtIndex;
@@ -468,7 +455,17 @@ public class MainActivity extends Activity {
             card.addView(summary);
             final int index = i;
             deleteAction.setOnClickListener(v -> confirmDeleteDebt(index));
-            swipeWrap.configureSwipe(card, deleteAction);
+            swipeWrap.configureSwipe(card, deleteAction, new SwipeFrameLayout.Listener() {
+                @Override
+                public void onMove(View swipeTarget, View action, float distance) {
+                    moveDebtSwipe(swipeTarget, action, distance);
+                }
+
+                @Override
+                public void onSettle(View swipeTarget, View action) {
+                    settleDebtSwipe(swipeTarget, action);
+                }
+            });
             arrow.setOnClickListener(v -> {
                 syncDrafts();
                 expandedDebtIndex = expandedDebtIndex == index ? -1 : index;
@@ -571,57 +568,11 @@ public class MainActivity extends Activity {
     }
 
     private void moveDebtSwipe(View swipeTarget, View deleteAction, float dx) {
-        swipeTarget.animate().cancel();
-        if (openDebtSwipeCard != null && openDebtSwipeCard != swipeTarget) {
-            View previousDelete = openDebtDeleteAction;
-            closeDebtSwipe(openDebtSwipeCard, previousDelete, 100);
-        }
-        float move = Math.max(-dp(DEBT_DELETE_DP), Math.min(0, dx));
-        swipeTarget.setTranslationX(move);
-        syncDebtDeleteVisibility(swipeTarget, deleteAction);
+        debtSwipeController.move(swipeTarget, deleteAction, dx);
     }
 
     private void settleDebtSwipe(View swipeTarget, View deleteAction) {
-        boolean open = swipeTarget.getTranslationX() < -dp(DEBT_DELETE_DP / 2f);
-        swipeTarget.animate().cancel();
-        deleteAction.animate().cancel();
-        swipeTarget.animate()
-            .translationX(open ? -dp(DEBT_DELETE_DP) : 0)
-            .setDuration(120)
-            .setUpdateListener((ValueAnimator animation) -> syncDebtDeleteVisibility(swipeTarget, deleteAction))
-            .withEndAction(() -> {
-                swipeTarget.animate().setUpdateListener(null);
-                syncDebtDeleteVisibility(swipeTarget, deleteAction);
-            })
-            .start();
-        openDebtSwipeCard = open ? swipeTarget : null;
-        openDebtDeleteAction = open ? deleteAction : null;
-    }
-
-    private void closeDebtSwipe(View swipeTarget, View deleteAction, long duration) {
-        if (swipeTarget == null) return;
-        swipeTarget.animate().cancel();
-        swipeTarget.animate()
-            .translationX(0)
-            .setDuration(duration)
-            .setUpdateListener((ValueAnimator animation) -> syncDebtDeleteVisibility(swipeTarget, deleteAction))
-            .withEndAction(() -> {
-                swipeTarget.animate().setUpdateListener(null);
-                syncDebtDeleteVisibility(swipeTarget, deleteAction);
-            })
-            .start();
-    }
-
-    private void syncDebtDeleteVisibility(View swipeTarget, View deleteAction) {
-        if (deleteAction == null) return;
-        float shown = Math.abs(swipeTarget == null ? 0 : swipeTarget.getTranslationX());
-        if (shown <= dp(2)) {
-            deleteAction.setAlpha(0f);
-            deleteAction.setVisibility(View.INVISIBLE);
-            return;
-        }
-        deleteAction.setVisibility(View.VISIBLE);
-        deleteAction.setAlpha(Math.min(1f, shown / dp(DEBT_DELETE_DP)));
+        debtSwipeController.settle(swipeTarget, deleteAction);
     }
 
     private void syncDrafts() {
@@ -691,24 +642,12 @@ public class MainActivity extends Activity {
             nameField.requestFocus();
             return;
         }
-        JSONArray debtJson = new JSONArray();
-        for (DebtDraft d : drafts) {
-            if (d.creditor.isEmpty() && d.amount.isEmpty()) continue;
-            if (d.creditor.isEmpty()) {
-                Toast.makeText(this, "请输入债务机构", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            JSONObject item = new JSONObject();
-            try {
-                item.put("id", d.id.isEmpty() ? uid("debt") : d.id);
-                item.put("type", d.type);
-                item.put("creditor", d.creditor);
-                item.put("amount", d.amount);
-                item.put("status", d.status);
-                item.put("dueDate", d.dueDate);
-                debtJson.put(item);
-            } catch (Exception ignored) {}
+        DebtDraftSerializer.Result debtResult = DebtDraftSerializer.serialize(drafts);
+        if (debtResult.missingCreditor) {
+            Toast.makeText(this, "请输入债务机构", Toast.LENGTH_SHORT).show();
+            return;
         }
+        JSONArray debtJson = debtResult.debts;
         if (debtJson.length() == 0 && !hasCompleteBasicInfo()) {
             new AlertDialog.Builder(this)
                 .setTitle("确认保存")
@@ -728,30 +667,15 @@ public class MainActivity extends Activity {
     }
 
     private void saveArchiveData(String name, JSONArray debtJson) {
-        List<JSONObject> clients = loadClients();
-        String now = iso();
-        JSONObject archive = new JSONObject();
-        try {
-            archive.put("id", editingId.isEmpty() ? uid("client") : editingId);
-            archive.put("name", name);
-            archive.put("phone", phoneField.getText().toString().trim());
-            archive.put("monthlyIncome", incomeField.getText().toString().trim());
-            archive.put("hasMortgage", hasMortgage);
-            archive.put("biggestConcern", concernField.getText().toString().trim());
-            archive.put("debts", debtJson);
-            archive.put("createdAt", now);
-            archive.put("updatedAt", now);
-            int index = findClient(clients, opt(archive, "id"), name);
-            if (index >= 0) {
-                archive.put("id", opt(clients.get(index), "id"));
-                archive.put("createdAt", opt(clients.get(index), "createdAt"));
-                clients.set(index, archive);
-            } else {
-                clients.add(archive);
-            }
-        } catch (Exception ignored) {}
-        saveClients(clients);
-        selectedId = opt(archive, "id");
+        selectedId = clientArchiveService.save(
+            editingId,
+            name,
+            phoneField.getText().toString().trim(),
+            incomeField.getText().toString().trim(),
+            hasMortgage,
+            concernField.getText().toString().trim(),
+            debtJson
+        );
         showDetail(selectedId);
     }
 
@@ -771,7 +695,7 @@ public class MainActivity extends Activity {
         detail(info, "联系电话：", empty(opt(c, "phone")));
         detail(info, "月收入：", empty(opt(c, "monthlyIncome")));
         detail(info, "总负债：", money(totalDebt(c)));
-        detail(info, "最担心：", empty(opt(c, "biggestConcern")));
+        detailMultiline(info, "最担心：", empty(opt(c, "biggestConcern")));
         body.addView(info);
 
         body.addView(step(null, "债务清单", null));
@@ -982,6 +906,22 @@ public class MainActivity extends Activity {
         r.addView(v, new LinearLayout.LayoutParams(0, dp(40), 1));
     }
 
+    private void detailMultiline(LinearLayout box, String label, String value) {
+        if (box.getChildCount() > 0) divider(box);
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.TOP);
+        row.setPadding(0, dp(10), 0, dp(10));
+        TextView title = label(label, BODY_SP, MUTED, Typeface.NORMAL);
+        title.setPadding(dp(10), 0, 0, 0);
+        title.setSingleLine(true);
+        TextView content = label(value, BODY_SP, INK, Typeface.BOLD);
+        content.setSingleLine(false);
+        content.setPadding(0, 0, dp(10), 0);
+        row.addView(title, new LinearLayout.LayoutParams(dp(96), -2));
+        row.addView(content, new LinearLayout.LayoutParams(0, -2, 1));
+        box.addView(row, new LinearLayout.LayoutParams(-1, -2));
+    }
+
     private LinearLayout box() {
         LinearLayout b = new LinearLayout(this);
         b.setOrientation(LinearLayout.VERTICAL);
@@ -1005,55 +945,12 @@ public class MainActivity extends Activity {
         e.setSingleLine(false);
         e.setBackgroundColor(Color.TRANSPARENT);
         e.setPadding(dp(10), 0, dp(10), 0);
-        e.setOnFocusChangeListener((v, hasFocus) -> {
-            if (hasFocus) {
-                focusedInput = v;
-                keepInputVisible(v);
-            } else if (focusedInput == v) {
-                focusedInput = null;
-            }
-        });
+        e.setOnFocusChangeListener((v, hasFocus) -> keyboardAvoider.onFocusChanged(v, hasFocus));
         return e;
     }
 
     private void keepInputVisible(View v) {
-        if (pageScroll == null) return;
-        focusedInput = v;
-        v.postDelayed(() -> scrollInputAboveKeyboard(v), 80);
-        v.postDelayed(() -> scrollInputAboveKeyboard(v), 240);
-        v.postDelayed(() -> scrollInputAboveKeyboard(v), 430);
-    }
-
-    private void installKeyboardAvoidance(View host) {
-        host.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
-            @Override
-            public void onGlobalLayout() {
-                if (pageScroll == null) return;
-                Rect visible = new Rect();
-                host.getWindowVisibleDisplayFrame(visible);
-                int hidden = host.getRootView().getHeight() - visible.bottom;
-                int keyboard = hidden > dp(120) ? hidden : 0;
-                int bottom = baseScrollPaddingBottom + keyboard;
-                if (pageScroll.getPaddingBottom() != bottom) {
-                    pageScroll.setPadding(0, 0, 0, bottom);
-                }
-                if (focusedInput != null) {
-                    focusedInput.postDelayed(() -> scrollInputAboveKeyboard(focusedInput), 80);
-                }
-            }
-        });
-    }
-
-    private void scrollInputAboveKeyboard(View input) {
-        if (pageScroll == null || input == null) return;
-        Rect inputRect = new Rect();
-        input.getDrawingRect(inputRect);
-        pageScroll.offsetDescendantRectToMyCoords(input, inputRect);
-        int visibleBottom = pageScroll.getScrollY() + pageScroll.getHeight() - pageScroll.getPaddingBottom();
-        int overlap = inputRect.bottom + dp(32) - visibleBottom;
-        if (overlap > 0) {
-            pageScroll.smoothScrollBy(0, overlap);
-        }
+        if (keyboardAvoider != null) keyboardAvoider.keepVisible(v);
     }
 
     private Button editValueButton(String text, String suffix) {
@@ -1103,22 +1000,7 @@ public class MainActivity extends Activity {
     }
 
     private String statusFromDueDate(String dueDate) {
-        Integer days = daysUntilDue(dueDate);
-        if (days != null && days < 0) return "逾期";
-        if (days != null && days <= 30) return "提醒";
-        return "正常";
-    }
-
-    private Integer daysUntilDue(String value) {
-        try {
-            if (value == null || value.trim().isEmpty()) return null;
-            SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd", Locale.CHINA);
-            Date date = format.parse(value);
-            Date today = format.parse(format.format(new Date()));
-            return (int) Math.ceil((date.getTime() - today.getTime()) / 86400000.0);
-        } catch (Exception e) {
-            return null;
-        }
+        return DebtInputFormatter.statusFromDueDate(dueDate);
     }
 
     private void paintStatus(Button button, String status) {
@@ -1126,16 +1008,7 @@ public class MainActivity extends Activity {
     }
 
     private String formatDebtAmountInput(String value) {
-        String raw = value == null ? "" : value.trim().replace(",", "").replace("万", "");
-        if (raw.isEmpty()) return "";
-        String numberText = raw.replaceAll("[^\\d.]", "");
-        if (numberText.isEmpty()) return "";
-        try {
-            double number = Double.parseDouble(numberText);
-            return String.format(Locale.CHINA, "%.2f", number).replaceAll("0+$", "").replaceAll("\\.$", "");
-        } catch (Exception e) {
-            return "";
-        }
+        return DebtInputFormatter.amount(value);
     }
 
     private TextView mortgageOption(String text, boolean active) {
@@ -1209,75 +1082,33 @@ public class MainActivity extends Activity {
     }
 
     private void signature() {
-        TextView s = label("轻债助手 · v 1.4.1", SMALL_SP, Color.rgb(168, 176, 173), Typeface.NORMAL);
+        TextView s = label("轻债助手 · v 1.5.1", SMALL_SP, Color.rgb(168, 176, 173), Typeface.NORMAL);
         s.setGravity(Gravity.CENTER);
         body.addView(s, new LinearLayout.LayoutParams(-1, dp(52)));
     }
 
     private boolean isActivated() {
-        return getSharedPreferences(LICENSE_PREF, Context.MODE_PRIVATE).getBoolean(LICENSE_ACTIVE, false);
+        return activationManager.isActivated();
     }
 
     private void setActivated() {
-        getSharedPreferences(LICENSE_PREF, Context.MODE_PRIVATE).edit().putBoolean(LICENSE_ACTIVE, true).apply();
+        activationManager.activate();
     }
 
     private String getDeviceCode() {
-        String seed = "";
-        try {
-            seed = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
-        } catch (Exception ignored) {}
-        if (seed == null || seed.trim().isEmpty()) {
-            SharedPreferences sp = getSharedPreferences(LICENSE_PREF, Context.MODE_PRIVATE);
-            seed = sp.getString(LICENSE_FALLBACK_ID, "");
-            if (seed.isEmpty()) {
-                seed = UUID.randomUUID().toString();
-                sp.edit().putString(LICENSE_FALLBACK_ID, seed).apply();
-            }
-        }
-        String hash = sha256(getPackageName() + "|" + seed);
-        return "QZ-" + hash.substring(0, 4) + "-" + hash.substring(4, 8);
+        return activationManager.getDeviceCode();
     }
 
     private boolean isValidActivationCode(String value) {
-        return normalizeCode(value).equals(normalizeCode(activationCodeFor(getDeviceCode())));
-    }
-
-    private String activationCodeFor(String deviceCode) {
-        String hash = sha256(LICENSE_SECRET + "|" + normalizeCode(deviceCode));
-        return "QZ-" + hash.substring(0, 4) + "-" + hash.substring(4, 8) + "-" + hash.substring(8, 12);
-    }
-
-    private String normalizeCode(String value) {
-        return (value == null ? "" : value).toUpperCase(Locale.US).replaceAll("[^A-Z0-9]", "");
-    }
-
-    private String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest(value.getBytes("UTF-8"));
-            StringBuilder out = new StringBuilder();
-            for (byte b : bytes) out.append(String.format(Locale.US, "%02X", b));
-            return out.toString();
-        } catch (Exception e) {
-            return "0000000000000000";
-        }
+        return activationManager.isValidCode(value);
     }
 
     private List<JSONObject> loadClients() {
-        SharedPreferences sp = getSharedPreferences("archive", Context.MODE_PRIVATE);
-        List<JSONObject> out = new ArrayList<>();
-        try {
-            JSONArray arr = new JSONArray(sp.getString(STORE, "[]"));
-            for (int i = 0; i < arr.length(); i++) if (arr.optJSONObject(i) != null) out.add(arr.optJSONObject(i));
-        } catch (Exception ignored) {}
-        return out;
+        return clientRepository.load();
     }
 
     private void saveClients(List<JSONObject> clients) {
-        JSONArray arr = new JSONArray();
-        for (JSONObject c : clients) arr.put(c);
-        getSharedPreferences("archive", Context.MODE_PRIVATE).edit().putString(STORE, arr.toString()).apply();
+        clientRepository.save(clients);
     }
 
     private void openImport() {
@@ -1298,21 +1129,7 @@ public class MainActivity extends Activity {
 
     private void importBackup(Uri uri) {
         try {
-            String raw = readText(uri);
-            JSONArray clients;
-            try {
-                JSONObject object = new JSONObject(raw);
-                clients = object.optJSONArray("clients");
-                if (clients == null) throw new Exception("missing clients");
-            } catch (Exception objectError) {
-                clients = new JSONArray(raw);
-            }
-            List<JSONObject> next = new ArrayList<>();
-            for (int i = 0; i < clients.length(); i++) {
-                JSONObject item = clients.optJSONObject(i);
-                if (item != null) next.add(item);
-            }
-            saveClients(next);
+            backupManager.importFrom(uri);
             Toast.makeText(this, "导入完成", Toast.LENGTH_SHORT).show();
             showHome();
         } catch (Exception e) {
@@ -1322,40 +1139,15 @@ public class MainActivity extends Activity {
 
     private void exportBackup(Uri uri) {
         try {
-            JSONObject backup = new JSONObject();
-            backup.put("app", "debt-customer-archive");
-            backup.put("version", "1.4.1");
-            backup.put("storageKey", STORE);
-            backup.put("exportedAt", iso());
-            JSONArray clients = new JSONArray();
-            for (JSONObject client : loadClients()) clients.put(client);
-            backup.put("clients", clients);
-            writeText(uri, backup.toString(2));
+            backupManager.exportTo(uri);
             Toast.makeText(this, "导出完成", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
             Toast.makeText(this, "导出失败", Toast.LENGTH_LONG).show();
         }
     }
 
-    private String readText(Uri uri) throws Exception {
-        InputStream input = getContentResolver().openInputStream(uri);
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        byte[] buffer = new byte[4096];
-        int count;
-        while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
-        input.close();
-        return output.toString("UTF-8");
-    }
-
-    private void writeText(Uri uri, String text) throws Exception {
-        OutputStream output = getContentResolver().openOutputStream(uri);
-        output.write(text.getBytes("UTF-8"));
-        output.close();
-    }
-
     private JSONObject getClient(String id) {
-        for (JSONObject c : loadClients()) if (opt(c, "id").equals(id)) return c;
-        return null;
+        return clientRepository.findById(id);
     }
 
     private void confirmDelete(String id) {
@@ -1372,97 +1164,32 @@ public class MainActivity extends Activity {
     }
 
     private JSONArray debts(JSONObject c) {
-        JSONArray arr = c == null ? null : c.optJSONArray("debts");
-        return arr == null ? new JSONArray() : arr;
+        return DebtCalculator.debts(c);
     }
 
     private long totalDebt(JSONObject c) {
-        long total = 0;
-        JSONArray arr = debts(c);
-        for (int i = 0; i < arr.length(); i++) total += parseDebtAmount(opt(arr.optJSONObject(i), "amount"));
-        return total;
-    }
-
-    private long parseDebtAmount(String value) {
-        String raw = value == null ? "" : value.replace(",", "").trim();
-        if (raw.isEmpty()) return 0;
-        try {
-            double n = Double.parseDouble(raw.replaceAll("[^\\d.]", ""));
-            return Math.round(raw.contains("万") || n < 10000 ? n * 10000 : n);
-        } catch (Exception e) {
-            return 0;
-        }
+        return DebtCalculator.total(c);
     }
 
     private String money(long value) {
-        if (value >= 10000) {
-            double n = value / 10000.0;
-            return String.format(Locale.CHINA, "%.2f", n).replaceAll("0+$", "").replaceAll("\\.$", "") + "万";
-        }
-        return String.valueOf(value);
-    }
-
-    private int findClient(List<JSONObject> clients, String id, String name) {
-        for (int i = 0; i < clients.size(); i++) {
-            JSONObject c = clients.get(i);
-            if ((!id.isEmpty() && opt(c, "id").equals(id)) || opt(c, "name").equals(name)) return i;
-        }
-        return -1;
+        return DebtCalculator.money(value);
     }
 
     private int alertCount() {
-        int count = 0;
-        for (JSONObject client : loadClients()) {
-            if (hasDueAlert(client)) count++;
-        }
-        return count;
-    }
-
-    private boolean hasDueAlert(JSONObject client) {
-        JSONArray arr = debts(client);
-        for (int i = 0; i < arr.length(); i++) {
-            JSONObject debt = arr.optJSONObject(i);
-            if (debt == null) continue;
-            if (!debtAlertLabel(debt).isEmpty()) return true;
-        }
-        return false;
+        return clientQueryService.alertCount();
     }
 
     private String alertSummary(JSONObject client) {
-        JSONArray arr = debts(client);
-        int remindCount = 0;
-        int overdueCount = 0;
-        for (int i = 0; i < arr.length(); i++) {
-            JSONObject debt = arr.optJSONObject(i);
-            if (debt == null) continue;
-            String label = debtAlertLabel(debt);
-            if ("提醒".equals(label)) remindCount++;
-            if ("逾期".equals(label)) overdueCount++;
-        }
-        List<String> items = new ArrayList<>();
-        if (remindCount > 0) items.add(remindCount + "个提醒");
-        if (overdueCount > 0) items.add(overdueCount + "个逾期");
-        return join(items, "，");
-    }
-
-    private String debtAlertLabel(JSONObject debt) {
-        String status = opt(debt, "status");
-        if ("结清".equals(status) || "协商".equals(status)) return "";
-        if ("逾期".equals(status) || "催收".equals(status)) return "逾期";
-        if ("提醒".equals(status)) return "提醒";
-        Integer days = daysUntilDue(opt(debt, "dueDate"));
-        if (days != null && days < 0) return "逾期";
-        if (days != null && days <= 30) return "提醒";
-        return "";
+        return DebtCalculator.alertSummary(client);
     }
 
     private String join(List<String> items, String separator) {
-        StringBuilder out = new StringBuilder();
+        StringBuilder output = new StringBuilder();
         for (String item : items) {
-            if (out.length() > 0) out.append(separator);
-            out.append(item);
+            if (output.length() > 0) output.append(separator);
+            output.append(item);
         }
-        return out.toString();
+        return output.toString();
     }
 
     private void colorAlertPart(SpannableString span, String text, String keyword, int color) {
@@ -1484,259 +1211,31 @@ public class MainActivity extends Activity {
     }
 
     private int statusColor(String status) {
-        if ("逾期".equals(status) || "催收".equals(status)) return DANGER;
-        if ("提醒".equals(status)) return Color.rgb(214, 149, 0);
-        if ("协商".equals(status) || "正常".equals(status)) return TEAL;
-        if ("结清".equals(status)) return MUTED;
-        return INK;
+        return StatusPalette.textColor(status);
     }
 
     private int statusPillBg(String status) {
-        if ("逾期".equals(status) || "催收".equals(status)) return Color.rgb(255, 242, 242);
-        if ("提醒".equals(status)) return Color.rgb(255, 248, 232);
-        return TEAL_SOFT;
+        return StatusPalette.background(status);
     }
 
     private int statusPillStroke(String status) {
-        if ("逾期".equals(status) || "催收".equals(status)) return Color.rgb(255, 205, 205);
-        if ("提醒".equals(status)) return Color.rgb(250, 224, 174);
-        return LINE;
-    }
-
-    private String valid(String value, String[] values, String fallback) {
-        for (String item : values) if (item.equals(value)) return item;
-        return fallback;
-    }
-
-    private String opt(JSONObject obj, String key) { return obj == null ? "" : obj.optString(key, ""); }
-    private String cleanValue(String value) { return value.replace("›", "").replace("▣", "").trim(); }
-    private String empty(String value) { return value == null || value.trim().isEmpty() ? "未填写" : value; }
-    private String uid(String prefix) { return prefix + "-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 8); }
-    private String iso() { return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.CHINA).format(new Date()); }
-    private String fmt(String iso) {
-        try {
-            Date d = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.CHINA).parse(iso);
-            return new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA).format(d);
-        } catch (Exception e) {
-            return "未记录";
-        }
-    }
-
-    private GradientDrawable round(int color, int stroke, int radius) {
-        GradientDrawable d = new GradientDrawable();
-        d.setColor(color);
-        d.setCornerRadius(dp(radius));
-        d.setStroke(1, stroke);
-        return d;
-    }
-
-    private GradientDrawable rightRound(int color, int radius) {
-        GradientDrawable d = new GradientDrawable();
-        d.setColor(color);
-        float r = dp(radius);
-        d.setCornerRadii(new float[]{0, 0, r, r, r, r, 0, 0});
-        return d;
-    }
-
-    private GradientDrawable dashedRound(int color, int stroke, int radius) {
-        GradientDrawable d = new GradientDrawable();
-        d.setColor(color);
-        d.setCornerRadius(dp(radius));
-        d.setStroke(1, stroke, dp(6), dp(4));
-        return d;
+        return StatusPalette.stroke(status);
     }
 
     private LinearLayout.LayoutParams margin(int w, int h, int l, int t, int r, int b) {
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(w, h);
-        p.setMargins(l, t, r, b);
-        return p;
+        return uiMetrics.margin(w, h, l, t, r, b);
     }
 
-    private int screenWidth() { return getResources().getDisplayMetrics().widthPixels; }
-    private int contentWidthDp() { return (int) (Math.min(screenWidth(), dp(430)) / getResources().getDisplayMetrics().density); }
-    private boolean isNarrowContent() { return contentWidthDp() < 390; }
-    private int topActionWidth() { return dp(isNarrowContent() ? 68 : 76); }
-    private int infoLabelWidth() { return dp(isNarrowContent() ? 116 : 132); }
-    private int editLabelWidth() { return dp(isNarrowContent() ? 132 : 168); }
-    private int typeLabelWidth() { return dp(isNarrowContent() ? 112 : 168); }
-    private int typeGroupRightPadding() { return dp(isNarrowContent() ? 4 : 18); }
-    private int typeSeparatorWidth() { return dp(isNarrowContent() ? 8 : 12); }
-    private int topInset() {
-        int id = getResources().getIdentifier("status_bar_height", "dimen", "android");
-        return (id > 0 ? getResources().getDimensionPixelSize(id) : dp(24)) + dp(8);
-    }
-    private int dp(float v) { return (int) (v * getResources().getDisplayMetrics().density + .5f); }
+    private android.graphics.drawable.GradientDrawable round(int color, int stroke, int radius) { return uiMetrics.round(color, stroke, radius); }
+    private android.graphics.drawable.GradientDrawable rightRound(int color, int radius) { return uiMetrics.rightRound(color, radius); }
+    private int screenWidth() { return uiMetrics.screenWidth(); }
+    private int topActionWidth() { return uiMetrics.topActionWidth(); }
+    private int infoLabelWidth() { return uiMetrics.infoLabelWidth(); }
+    private int editLabelWidth() { return uiMetrics.editLabelWidth(); }
+    private int typeLabelWidth() { return uiMetrics.typeLabelWidth(); }
+    private int typeGroupRightPadding() { return uiMetrics.typeGroupRightPadding(); }
+    private int typeSeparatorWidth() { return uiMetrics.typeSeparatorWidth(); }
+    private int topInset() { return uiMetrics.topInset(); }
+    private int dp(float v) { return uiMetrics.dp(v); }
 
-    private class SwipeFrameLayout extends FrameLayout {
-        private View swipeTarget;
-        private View deleteAction;
-        private float startX;
-        private float startY;
-        private boolean swiping;
-
-        SwipeFrameLayout(Context context) {
-            super(context);
-        }
-
-        void configureSwipe(View swipeTarget, View deleteAction) {
-            this.swipeTarget = swipeTarget;
-            this.deleteAction = deleteAction;
-        }
-
-        @Override
-        public boolean onInterceptTouchEvent(MotionEvent event) {
-            if (swipeTarget == null || deleteAction == null) return super.onInterceptTouchEvent(event);
-            switch (event.getAction()) {
-                case MotionEvent.ACTION_DOWN:
-                    startX = event.getRawX();
-                    startY = event.getRawY();
-                    swiping = false;
-                    return false;
-                case MotionEvent.ACTION_MOVE:
-                    float dx = event.getRawX() - startX;
-                    float dy = event.getRawY() - startY;
-                    if (Math.abs(dx) > dp(8) && Math.abs(dx) > Math.abs(dy) * 1.3f) {
-                        swiping = true;
-                        return true;
-                    }
-                    return false;
-            }
-            return super.onInterceptTouchEvent(event);
-        }
-
-        @Override
-        public boolean onTouchEvent(MotionEvent event) {
-            if (swipeTarget == null || deleteAction == null) return super.onTouchEvent(event);
-            switch (event.getAction()) {
-                case MotionEvent.ACTION_MOVE:
-                    moveDebtSwipe(swipeTarget, deleteAction, event.getRawX() - startX);
-                    return true;
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    settleDebtSwipe(swipeTarget, deleteAction);
-                    swiping = false;
-                    return true;
-            }
-            return swiping || super.onTouchEvent(event);
-        }
-    }
-
-    private class TypeIconView extends View {
-        private String type;
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-
-        TypeIconView(Context context, String type) {
-            super(context);
-            this.type = type == null ? "" : type;
-            paint.setColor(Color.rgb(156, 166, 163));
-            paint.setStrokeWidth(dp(1.35f));
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeCap(Paint.Cap.ROUND);
-            paint.setStrokeJoin(Paint.Join.ROUND);
-            textPaint.setColor(Color.rgb(156, 166, 163));
-            textPaint.setTextAlign(Paint.Align.CENTER);
-            textPaint.setTypeface(Typeface.DEFAULT_BOLD);
-            textPaint.setTextSize(dp(8.5f));
-        }
-
-        void setType(String type) {
-            this.type = type == null ? "" : type;
-            invalidate();
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            float cx = getWidth() / 2f;
-            float cy = getHeight() / 2f;
-            if ("信用卡".equals(type)) {
-                drawCard(canvas, cx, cy);
-            } else if ("银行贷款".equals(type)) {
-                drawBank(canvas, cx, cy);
-            } else {
-                drawPhone(canvas, cx, cy);
-            }
-        }
-
-        private void drawPhone(Canvas canvas, float cx, float cy) {
-            float left = cx - dp(9);
-            float top = cy - dp(10);
-            float right = cx + dp(3);
-            float bottom = cy + dp(8);
-            float radius = dp(2);
-            RectF topLeft = new RectF(left, top, left + radius * 2, top + radius * 2);
-            RectF topRight = new RectF(right - radius * 2, top, right, top + radius * 2);
-            RectF bottomLeft = new RectF(left, bottom - radius * 2, left + radius * 2, bottom);
-            canvas.drawArc(topLeft, 180, 90, false, paint);
-            canvas.drawArc(topRight, 270, 90, false, paint);
-            canvas.drawArc(bottomLeft, 90, 90, false, paint);
-            canvas.drawLine(left + radius, top, right - radius, top, paint);
-            canvas.drawLine(left, top + radius, left, bottom - radius, paint);
-            canvas.drawLine(right, top + radius, right, cy - dp(2.2f), paint);
-            canvas.drawLine(left + radius, bottom, cx - dp(1.4f), bottom, paint);
-            float coinX = cx + dp(5.2f);
-            float coinY = cy + dp(4.8f);
-            canvas.drawCircle(coinX, coinY, dp(5.4f), paint);
-            Paint.FontMetrics metrics = textPaint.getFontMetrics();
-            float baseline = coinY - (metrics.ascent + metrics.descent) / 2f;
-            canvas.drawText("¥", coinX, baseline, textPaint);
-        }
-
-        private void drawCard(Canvas canvas, float cx, float cy) {
-            RectF card = new RectF(cx - dp(9), cy - dp(6.5f), cx + dp(9), cy + dp(6.5f));
-            canvas.drawRoundRect(card, dp(2), dp(2), paint);
-            canvas.drawLine(cx - dp(6.5f), cy - dp(1.5f), cx + dp(6.5f), cy - dp(1.5f), paint);
-            canvas.drawLine(cx - dp(5.5f), cy + dp(3), cx - dp(1.5f), cy + dp(3), paint);
-        }
-
-        private void drawBank(Canvas canvas, float cx, float cy) {
-            canvas.drawLine(cx - dp(9), cy - dp(4.5f), cx, cy - dp(9), paint);
-            canvas.drawLine(cx, cy - dp(9), cx + dp(9), cy - dp(4.5f), paint);
-            canvas.drawLine(cx - dp(7.5f), cy - dp(3), cx + dp(7.5f), cy - dp(3), paint);
-            for (float x : new float[]{cx - dp(5), cx, cx + dp(5)}) {
-                canvas.drawLine(x, cy - dp(1), x, cy + dp(6), paint);
-            }
-            canvas.drawLine(cx - dp(8.5f), cy + dp(8), cx + dp(8.5f), cy + dp(8), paint);
-        }
-    }
-
-    private class ChevronView extends View {
-        private final boolean expanded;
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-
-        ChevronView(Context context, boolean expanded) {
-            super(context);
-            this.expanded = expanded;
-            paint.setColor(MUTED);
-            paint.setStrokeWidth(dp(2.2f));
-            paint.setStrokeCap(Paint.Cap.ROUND);
-            paint.setStrokeJoin(Paint.Join.ROUND);
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            float cx = getWidth() / 2f;
-            float cy = getHeight() / 2f;
-            float half = dp(5.5f);
-            float rise = dp(4.5f);
-            if (expanded) {
-                canvas.drawLine(cx - half, cy + rise / 2f, cx, cy - rise / 2f, paint);
-                canvas.drawLine(cx, cy - rise / 2f, cx + half, cy + rise / 2f, paint);
-            } else {
-                canvas.drawLine(cx - half, cy - rise / 2f, cx, cy + rise / 2f, paint);
-                canvas.drawLine(cx, cy + rise / 2f, cx + half, cy - rise / 2f, paint);
-            }
-        }
-    }
-
-    private static class DebtDraft {
-        String id = "";
-        String type = "网贷";
-        String creditor = "";
-        String amount = "";
-        String status = "正常";
-        String dueDate = "";
-    }
 }

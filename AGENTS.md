@@ -60,14 +60,14 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradle
 安装并启动命令：
 
 ```bash
-"$HOME/Library/Android/sdk/platform-tools/adb" install -r "安卓原生/app/build/outputs/apk/debug/轻债助手 v1.4.1.apk"
+"$HOME/Library/Android/sdk/platform-tools/adb" install -r "安卓原生/app/build/outputs/apk/debug/轻债助手 v1.5.1.apk"
 "$HOME/Library/Android/sdk/platform-tools/adb" shell am start -S -n com.pcbiao.debtarchive/.MainActivity
 ```
 
 ## 安装包规则
 
 - 标准安装包只保留一个，文件名格式固定为：`App名称 vX.Y.Z.apk`
-- 当前 App 标准安装包路径示例：`安卓原生/app/build/outputs/apk/debug/轻债助手 v1.4.1.apk`
+- 当前 App 标准安装包路径示例：`安卓原生/app/build/outputs/apk/debug/轻债助手 v1.5.1.apk`
 - Gradle 默认生成的 `app-debug.apk` 需要改名为标准安装包。
 - 不要保留多个重复 APK。
 - `app/build/` 是构建输出，不提交到 GitHub。

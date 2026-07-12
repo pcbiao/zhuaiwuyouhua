@@ -27,5 +27,5 @@
 
 ## 版本
 
-- Android `versionName`: `1.4.1`
-- Android `versionCode`: `141`
+- Android `versionName`: `1.5.1`
+- Android `versionCode`: `151`
